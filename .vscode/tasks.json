@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Compile n Run Assembly",
+            "type": "shell",
+            "command": "nasm -f win64 ${fileBasename} -o ${fileBasenameNoExtension}.obj ; gcc ${fileBasenameNoExtension}.obj -o ${fileBasenameNoExtension}.exe ; .\\${fileBasenameNoExtension}.exe",
+            "options": {
+                "cwd": "${fileDirname}",
+                "env": {
+                    "PATH": "${env:PATH};C:\\msys64\\ucrt64\\bin"
+                }
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "importDefault": true
+            }
+        }
+    ]
+}
