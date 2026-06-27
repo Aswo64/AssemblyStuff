@@ -33,8 +33,6 @@ main:
     lea r9, [bytes_read]
     call ReadConsoleA
 
-
-    mov rdx, rax
     call printShi
 
     xor rcx, rcx
@@ -45,8 +43,18 @@ printShi:
     mov rcx, -11
     call GetStdHandle
     mov rcx, rax
+    lea rdx, [input_buffer]
     mov r8d, [bytes_read]
     lea r9, [bytes_written]
     mov qword [rsp + 32], 0
     call WriteConsoleA
+    ret
+
+convertShi:
+    mov rcx, [input_buffer]
+.convertLoop:
+    cmp byte [rcx], 0
+    je .done
+    jump .convertLoop
+.done:
     ret
