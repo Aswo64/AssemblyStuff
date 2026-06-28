@@ -38,7 +38,7 @@ main:
     xor rcx, rcx
     call ExitProcess
 
-
+; Could use a macro for this, but if using this function a buncha times, best bet to make it a function
 printShi:
     mov rcx, -11
     call GetStdHandle
@@ -48,13 +48,4 @@ printShi:
     lea r9, [bytes_written]
     mov qword [rsp + 32], 0
     call WriteConsoleA
-    ret
-
-convertShi:
-    mov rcx, [input_buffer]
-.convertLoop:
-    cmp byte [rcx], 0
-    je .done
-    jump .convertLoop
-.done:
     ret
