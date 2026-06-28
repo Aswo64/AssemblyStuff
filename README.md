@@ -1,6 +1,7 @@
 # AssemblyStuff
 
 working w/ assembly
+
 Made these programs after reading https://github.com/mschwartz/assembly-tutorial#alu
 - Learned the architecture of a CPU and how it interacts with memory
 - Learned how the CPU will use the MMU to allocate virtual memory for processes, making it think it has x amount of memory when it actually does not yet, further helped me understand the point of "aligning" in assembly
