@@ -20,4 +20,11 @@ These have inputs and stuff/parameters IF we are in 32 bit (using eax, edi, and 
 
 - Understood what pages, segfaults, macros are and the process of calling functions and getting external libraries
 - Learned conditionals for assembly, not je but %if from %assign, good for determining the code before it runs/while it compiles, good for checking stuff before it runs 
-- Understood how to reserve bytes in order to make variables or structs 
+- Understood how to reserve bytes in order to make variables or structs
+- Made a hello world program in 3 ways, each way differing on how "low-level it is", from using Windows API (calling ExitProcess) to talking with the kernel directly (syscalls)
+- Made a program that takes an input and outputs the same, kinda like echo
+- Decided to make a program that can take a numeric input and change the memory of the ASCII literal (as the console takes input as ASCII literal) into the actual number literal as hex
+- Found that I needed to learn about FPU's as floats were necessary, especially if I wanted to take in inputs that had decimals, ALU's were not enough anymore
+- Learned about the IEEE 754 standard of how a float/double is formatted, and decided I should make the inverse root formula
+- Learned about the inverse root formula and how people back then approximated it without bruteforcing to find the answer and finding the answer in the most efficient way
+- Learned about bit shifting and its significance towards binary literals, how the log (base 2) of a number is equal to the float representation of that number in binary, and finally using Newton's Method to make a final approximation 
