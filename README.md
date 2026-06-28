@@ -1,4 +1,5 @@
 # AssemblyStuff
+
 working w/ assembly
 Made these programs after reading https://github.com/mschwartz/assembly-tutorial#alu
 - Learned the architecture of a CPU and how it interacts with memory
