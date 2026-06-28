@@ -25,6 +25,7 @@ These have inputs and stuff/parameters IF we are in 32 bit (using eax, edi, and 
 - Made a program that takes an input and outputs the same, kinda like echo
 - Decided to make a program that can take a numeric input and change the memory of the ASCII literal (as the console takes input as ASCII literal) into the actual number literal as hex
 - Found that I needed to learn about FPU's as floats were necessary, especially if I wanted to take in inputs that had decimals, ALU's were not enough anymore
-- Learned about the IEEE 754 standard of how a float/double is formatted, and decided I should make the inverse root formula
+- Learned about the IEEE 754 standard of how a float/double is formatted, and decided I should make the inverse root formula - https://m.youtube.com/watch?v=p8u_k2LIZyo
 - Learned about the inverse root formula and how people back then approximated it without bruteforcing to find the answer and finding the answer in the most efficient way
-- Learned about bit shifting and its significance towards binary literals, how the log (base 2) of a number is equal to the float representation of that number in binary, and finally using Newton's Method to make a final approximation 
+- Learned about bit shifting and its significance towards binary literals, how the log (base 2) of a number is equal to the float representation of that number in binary, and finally using Newton's Method to make a final approximation
+  
