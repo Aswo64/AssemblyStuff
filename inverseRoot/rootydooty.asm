@@ -68,6 +68,7 @@ invSquare:
     sub ecx, eax
     movd xmm0, ecx
 
+    ; Doing only one Newton iteration causes for an error of 0.175%
     movss xmm3, xmm0
     mulss xmm3, xmm3
     mulss xmm3, xmm1
@@ -149,6 +150,8 @@ toBuoyancy:
 .leBack:
     movzx rax, byte [r9]
     inc r9
+    cmp al, '.'
+    je .leBack
     cmp al, 13
     je .fini
     cmp al, 10
