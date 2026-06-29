@@ -14,7 +14,8 @@
             "problemMatcher": [],
             "group": {
                 "kind": "build",
-                "importDefault": true
+                "importDefault": true,
+                "isDefault": true
             }
         }
     ]

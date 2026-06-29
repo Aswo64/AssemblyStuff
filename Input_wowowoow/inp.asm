@@ -40,6 +40,7 @@ main:
 
 ; Could use a macro for this, but if using this function a buncha times, best bet to make it a function
 printShi:
+    sub rsp, 40 
     mov rcx, -11
     call GetStdHandle
     mov rcx, rax
@@ -48,4 +49,6 @@ printShi:
     lea r9, [bytes_written]
     mov qword [rsp + 32], 0
     call WriteConsoleA
+    add rsp, 40
+    ; will pop wherever rsp is into rip, so ts is why we add rsp back to the return address, aka however much we subtracted in the beninging
     ret
