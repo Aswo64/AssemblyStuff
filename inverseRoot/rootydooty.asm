@@ -5,7 +5,6 @@ section .data
     fmt             db      "%f", 10, 0
     hexaPre         db      "0x", 0
     input_size      equ     100
-    floatDecimal    dd      0.1
 
 
 
@@ -82,8 +81,6 @@ invSquare:
     movss xmm2, xmm5
     subss xmm2, xmm3
     mulss xmm0, xmm2 
-    
-
     ret
 
 leInput:
@@ -126,11 +123,12 @@ binaryToHexa:
 toBuoyancy:
     xorps xmm0, xmm0
     xorps xmm1, xmm1
-
-    mov rax, 10
-    cvtsi2ss xmm2, rax
-    movss xmm3, [floatDecimal]
-    movss xmm4, [floatDecimal]
+    mov eax, 10
+    cvtsi2ss xmm2, eax
+    ; You could use eax here, but if you do it will zero out the upper 32 bits of rax, js saying
+    mov eax, 0x3DCCCCCC
+    movd xmm3, eax
+    movd xmm4, eax
 .inFront:
     movzx rax, byte [r9]
     inc r9
