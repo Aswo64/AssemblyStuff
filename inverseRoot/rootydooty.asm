@@ -9,6 +9,9 @@ section .data
 
 
 section .bss
+; could use the heap to do this instead, using windows API, but this works, using windows API works well with memory as using syscalls for every allocation is very slow as
+; the OS gives memory in "pages", so if you want to allocate 10 bytes only, you can't, you must take 4096 bytes at a time, this can lead to wasted byte, however 
+; what the malloc windows API does is it keeps track of the memory it already has from syscalls and splits the page into smaller chunks, allowing u to fit 10 bytes in there 
     hexStr         resb    10
     alignb 8
     bytesWritten   resq    1
@@ -42,7 +45,6 @@ main:
     movq rdx, xmm0
     lea rcx, [fmt]
     call printf
-
 
     xor rcx, rcx
     call ExitProcess
@@ -125,7 +127,8 @@ toBuoyancy:
     xorps xmm1, xmm1
     mov eax, 10
     cvtsi2ss xmm2, eax
-    ; You could use eax here, but if you do it will zero out the upper 32 bits of rax, js saying
+    ; I used eax here, using so zeros out the upper 32 bits of rax, js saying
+    ; It is recommended normally to not use bigger registers than you need as the instruction is longer, and thus slower
     mov eax, 0x3DCCCCCC
     movd xmm3, eax
     movd xmm4, eax
