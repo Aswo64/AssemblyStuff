@@ -54,8 +54,6 @@ main:
     ; Important thing, I tried calling this function twice, but it only printed once, I later found out it was because r9 is a volative register, meaning when the function WriteConsoleA
     ; is called, it overwrites the value of r9 and nothing left is there 
     call printShi
-    
-
 
     ; cvtss2sd xmm0, xmm0
     ; movq rdx, xmm0
