@@ -2,7 +2,9 @@
 
 working w/ assembly | Fast Inverse Sqrt Algo | MMU | CPU Architecture | ABI convention | Kernel & User Ring | IEE 754 | Library Integration
 
-Made these programs after reading https://github.com/mschwartz/assembly-tutorial#alu
+I got bored and began to try out linux, thought it would be a good idea to understand more how OS's run processes and how the OS will accomodate hardware for programs before I get into linux. I fell into a rabbit hole and ended up making a fast inverse sqrt algo in assembly, even though there is already an instruction (RSQRTSS) dedicated to do the same thing.
+
+Coded these assembly files after reading https://github.com/mschwartz/assembly-tutorial#alu
 - Learned the architecture of a CPU and how it interacts with memory
 - Learned how the CPU will use the MMU to allocate virtual memory for processes, making it think it has x amount of memory when it actually does not yet, further helped me understand the point of "aligning" in assembly
 - Learned how an assembler will compile assembly to create object files, files that convert human code into  machine code (binary), and a linker will turn it into an ELF file that can be executed, the ELF file is split into parts, .text, the actual code and shi, .data, initialized data (not to be confused with the heap, .data has a fixed sized and it determined at compile time, the heap changes and fluctuates, the heap is stored on the RAM, not the ELF file), .rodata, read only data, .bss, non-initialized data
