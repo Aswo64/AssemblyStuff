@@ -38,11 +38,18 @@ main:
 
     mov r9, inputBuffer
     call toBuoyancy
+    rsqrtss xmm6, xmm0
 
     call invSquare
 
     cvtss2sd xmm0, xmm0
     movq rdx, xmm0
+    lea rcx, [fmt]
+    call printf
+
+    
+    cvtss2sd xmm6, xmm6
+    movq rdx, xmm6
     lea rcx, [fmt]
     call printf
 
