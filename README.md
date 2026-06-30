@@ -1,6 +1,6 @@
 # AssemblyStuff
 
-working w/ assembly
+working w/ assembly | Fast Inverse Sqrt Algo | MMU | CPU Architecture | ABI convention | Kernel & User Ring | IEE 754 | Library Integration
 
 Made these programs after reading https://github.com/mschwartz/assembly-tutorial#alu
 - Learned the architecture of a CPU and how it interacts with memory
