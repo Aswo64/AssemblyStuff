@@ -11,9 +11,12 @@ Coded these assembly files after reading https://github.com/mschwartz/assembly-t
 - Learned about Prologue and Epilogue, and the types of registers, specifically the special purpose ones such as RIP, RSP, and how some have specific purposes but can be used for general purpose:
 
 Below 3 lines are called the prologue:
-push rbp \n
-mov rbp, rsp \n
-sub rsp, 16 \n
+push rbp
+
+mov rbp, rsp
+
+sub rsp, 16 
+
 
 Rbp is sometimes omitted (called frame pointer omission, and makes it harder to debug), rbp makes it easier to find local variables and arguments since rbp is static/fixed during functions, unlike rsp which moves a lot. That doesn't mean its impossible to use rsp for finding the same variables and arguments, just a bit harder, but it helps with efficiency, using rbp for other purposes is better as you now have a whole other register you can use for general purpose. Using registers instead of memory is way way more efficient, registers are physical units inside the CPU, whereas memory is physically far away and all the way on the RAM, taking up to 200 times more time for data to travel if you use RAM.
 
