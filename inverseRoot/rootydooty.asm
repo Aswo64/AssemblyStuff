@@ -47,7 +47,7 @@ main:
     lea rcx, [fmt]
     call printf
 
-    
+
     cvtss2sd xmm6, xmm6
     movq rdx, xmm6
     lea rcx, [fmt]
@@ -84,6 +84,7 @@ invSquare:
     subss xmm2, xmm3
     mulss xmm0, xmm2 
 
+    ; doing another is like idk
     movss xmm3, xmm0
     mulss xmm3, xmm3
     mulss xmm3, xmm1
