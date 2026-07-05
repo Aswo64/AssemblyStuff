@@ -15,7 +15,7 @@ extern Sleep
 
 section .data
     window_class_name db "MyWin64Class", 0
-    window_title      db "Native Windows Graphics", 0
+    window_title      db "za windows", 0
 
 section .bss
     wnd_class resb 80
