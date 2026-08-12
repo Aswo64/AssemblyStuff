@@ -12,10 +12,14 @@ extern SetPixel
 extern ReleaseDC
 extern ShowWindow
 extern Sleep
+extern SetTimer
+extern InvalidateRect
 
 section .data
     window_class_name db "MyWin64Class", 0
     window_title      db "za windows", 0
+    pixel_x dq 20
+    pixel_y dq 20
 
 section .bss
     wnd_class resb 80
@@ -64,6 +68,12 @@ main:
     mov rdx, 5
     call ShowWindow
 
+    mov rcx, rax
+    mov rdx, 1
+    mov r8, 1000
+    xor r9, r9
+    call SetTimer
+
 message_loop:
     lea rcx, [msg]
     xor rdx, rdx
@@ -91,9 +101,23 @@ window_procedure:
     je handle_destroy
     cmp rdx, 15
     je handle_paint
+    cmp rdx, 0x0113
+    je handle_timer
 
 default_processing:
     call DefWindowProcA
+    leave
+    ret
+
+handle_timer:
+    inc qword [pixel_x]
+
+    mov rcx, [hwnd]
+    xor rdx, rdx
+    mov r8, 0
+    call InvalidateRect
+
+    xor rax, rax
     leave
     ret
 
@@ -103,17 +127,8 @@ handle_paint:
     mov rbx, rax
 
     mov rcx, rbx
-    mov rdx, 20
-    mov r8, 20
-    mov r9, 0x000000FF
-    call SetPixel
-
-    ; mov rcx, 500
-    ; call Sleep
-
-    mov rcx, rbx
-    mov rdx, 50
-    mov r8, 50d
+    mov rdx, [pixel_x]
+    mov r8, [pixel_y]
     mov r9, 0x000000FF
     call SetPixel
 
