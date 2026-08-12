@@ -108,9 +108,12 @@ handle_paint:
     mov r9, 0x000000FF
     call SetPixel
 
+    ; mov rcx, 500
+    ; call Sleep
+
     mov rcx, rbx
     mov rdx, 50
-    mov r8, 50
+    mov r8, 50d
     mov r9, 0x000000FF
     call SetPixel
 
