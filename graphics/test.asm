@@ -98,6 +98,7 @@ default_processing:
     ret
 
 handle_paint:
+; Has the window handle and message in rcx
     push rcx
     call GetDC
     mov rbx, rax
