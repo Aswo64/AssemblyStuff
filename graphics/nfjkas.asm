@@ -103,7 +103,7 @@ main:
 
     mov rcx, [hwnd]
     mov edx, 1
-    mov r8d, 10
+    mov r8d, 0
     xor r9d, r9d
     call SetTimer
 
@@ -186,7 +186,6 @@ handle_timer:
     call ReleaseDC
 
 timer_done:
-
     xor eax, eax
     leave
     ret
