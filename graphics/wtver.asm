@@ -112,7 +112,7 @@ default_processing:
     ret
 
 handle_timer:
-    mov [pixel_x], 200
+    inc qword [pixel_x]
 
     mov rcx, [hwnd]
     xor rdx, rdx
@@ -124,18 +124,22 @@ handle_timer:
     ret
 
 handle_paint:
-    push rcx
+    mov rcx, [hwnd]
     call GetDC
-    mov rbx, rax
 
-    mov rcx, rbx
+
+    push rax
+    mov rcx, rax
     mov rdx, [pixel_x]
     mov r8, [pixel_y]
-    mov r9, 0x000000FF
+    mov r9d, 0x000000FF
     call SetPixel
 
-    pop rcx
-    mov rdx, rbx
+
+    mov rcx, [hwnd]
+    pop rax
+    mov rdx, rax
+
     call ReleaseDC
 
     xor rax, rax
