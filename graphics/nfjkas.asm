@@ -101,14 +101,35 @@ main:
     call ShowWindow
 
 
-    mov rcx, [hwnd]
-    mov edx, 1
-    mov r8d, 0
-    xor r9d, r9d
-    call SetTimer
+    ; mov rcx, [hwnd]
+    ; mov edx, 1
+    ; mov r8d, 0
+    ; xor r9d, r9d
+    ; call SetTimer
 
 
 message_loop:
+    inc qword [pixel_x]
+
+    mov rcx, [hwnd]
+    call GetDC
+
+    test rax, rax
+    jz timer_done
+
+    push rax
+    mov rcx, rax
+    mov rdx, [pixel_x]
+    mov r8, [pixel_y]
+    mov r9d, 0x000000FF
+    call SetPixel
+
+
+    mov rcx, [hwnd]
+    pop rax
+    mov rdx, rax
+
+    call ReleaseDC
 
     lea rcx, [msg]
 
@@ -125,6 +146,9 @@ message_loop:
 
     lea rcx, [msg]
     call DispatchMessageA
+
+    
+    
 
     jmp message_loop
 
