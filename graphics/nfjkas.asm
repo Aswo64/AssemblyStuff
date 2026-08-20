@@ -7,6 +7,7 @@ extern CreateWindowExA
 extern RegisterClassExA
 extern DefWindowProcA
 extern GetMessageA
+extern PeekMessageA
 extern DispatchMessageA
 extern GetDC
 extern SetPixel
@@ -101,55 +102,33 @@ main:
     call ShowWindow
 
 
-    ; mov rcx, [hwnd]
-    ; mov edx, 1
-    ; mov r8d, 0
-    ; xor r9d, r9d
-    ; call SetTimer
+    mov rcx, [hwnd]
+    mov edx, 1
+    mov r8d, 1
+    xor r9d, r9d
+    call SetTimer
 
 
 message_loop:
-    inc qword [pixel_x]
-
-    mov rcx, [hwnd]
-    call GetDC
-
-    test rax, rax
-    jz timer_done
-
-    push rax
-    mov rcx, rax
-    mov rdx, [pixel_x]
-    mov r8, [pixel_y]
-    mov r9d, 0x000000FF
-    call SetPixel
-
-
-    mov rcx, [hwnd]
-    pop rax
-    mov rdx, rax
-
-    call ReleaseDC
-
     lea rcx, [msg]
 
-    xor edx, edx
-    xor r8d, r8d
-    xor r9d, r9d
-
+    lea rcx, [msg]
+    xor rdx, rdx
+    xor r8, r8
+    xor r9, r9
+    ; mov dword [rsp + 32], 1
     call GetMessageA
-
-
-
-    cmp rax, 0
+    cmp rax, -1
     jle exit_program
+
+    test rax, rax
+    jz .go_again
 
     lea rcx, [msg]
     call DispatchMessageA
+    jmp message_loop
 
-    
-    
-
+.go_again:
     jmp message_loop
 
 
@@ -171,7 +150,7 @@ window_procedure:
 
     push rbp
     mov rbp, rsp
-    sub rsp, 32
+    sub rsp, 64
 
     cmp edx, 2
     je handle_destroy
@@ -195,7 +174,7 @@ handle_timer:
     test rax, rax
     jz timer_done
 
-    push rax
+    mov [rsp + 32], rax
     mov rcx, rax
     mov rdx, [pixel_x]
     mov r8, [pixel_y]
@@ -204,8 +183,7 @@ handle_timer:
 
 
     mov rcx, [hwnd]
-    pop rax
-    mov rdx, rax
+    mov rdx, [rsp + 32]
 
     call ReleaseDC
 

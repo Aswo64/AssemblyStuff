@@ -6,6 +6,7 @@ extern CreateWindowExA
 extern RegisterClassExA
 extern DefWindowProcA
 extern GetMessageA
+extern PeekMessageA
 extern DispatchMessageA
 extern GetDC
 extern SetPixel
@@ -16,6 +17,9 @@ extern SetTimer
 extern InvalidateRect
 extern BeginPaint
 extern EndPaint
+extern CreateThread
+extern ExitThread
+extern UpdateWindow
 
 section .data
     window_class_name db "MyWin64Class", 0
@@ -72,23 +76,52 @@ main:
     mov rdx, 5
     call ShowWindow
 
-    mov rcx, [hwnd]
-    mov rdx, 1
-    mov r8, 10
-    xor r9, r9
-    call SetTimer
+    xor ecx, ecx
+    xor edx, edx
+    lea r8, [new_thread]
+    xor r9d, r9d
+
+    mov qword [rsp+32], 0 
+    mov qword [rsp+40], 0
+
+    call CreateThread
+
+    ; mov rcx, [hwnd]
+    ; mov rdx, 1
+    ; mov r8, 10
+    ; xor r9, r9
+    ; call SetTimer
 
 message_loop:
+    ; lea rcx, [msg]
+    ; xor rdx, rdx
+    ; xor r8, r8
+    ; xor r9, r9
+    ; call GetMessageA
+    ; cmp rax, 0
+    ; jle exit_program
+
+    ; lea rcx, [msg]
+    ; call DispatchMessageA
+    ; jmp message_loop
+
     lea rcx, [msg]
     xor rdx, rdx
     xor r8, r8
     xor r9, r9
-    call GetMessageA
-    cmp rax, 0
+    mov dword [rsp + 32], 1
+    call PeekMessageA
+    cmp rax, -1
     jle exit_program
+
+    test rax, rax
+    jz .go_again
 
     lea rcx, [msg]
     call DispatchMessageA
+    jmp message_loop
+
+.go_again:
     jmp message_loop
 
 exit_program:
@@ -154,3 +187,20 @@ handle_destroy:
     xor rax, rax
     leave
     ret
+
+new_thread:
+    sub rsp, 40
+    inc qword [pixel_x]
+
+    mov rcx, [hwnd]
+    xor rdx, rdx
+    mov r8, 0
+    call InvalidateRect
+    mov rcx, [hwnd]
+    call UpdateWindow
+
+    mov ecx, 10
+    call Sleep
+
+    xor rax, rax
+    jmp new_thread
