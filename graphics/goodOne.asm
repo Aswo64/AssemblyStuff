@@ -148,6 +148,7 @@ default_processing:
 
 handle_timer:
     inc qword [pixel_x]
+    inc qword [pixel_y]
 
     mov rcx, [hwnd]
     xor rdx, rdx
@@ -191,6 +192,7 @@ handle_destroy:
 new_thread:
     sub rsp, 40
     inc qword [pixel_x]
+    inc qword [pixel_y]
 
     mov rcx, [hwnd]
     xor rdx, rdx
@@ -204,3 +206,37 @@ new_thread:
 
     xor rax, rax
     jmp new_thread
+
+; rcx = x0
+; rdx = y0
+; r8 = x1
+; r9 = y1
+draw_line:
+    sub rsp, 32
+    mov [rsp], rcx
+    mov [rsp+8], rdx
+    mov [rsp+16], r8
+    mov [rsp+24], r9
+
+    sub r9, rdx
+    sub r8, rcx
+    cvtsi2ss xmm0, r9
+    cvtsi2ss xmm1, r8
+    divss xmm0, xmm1
+    mov eax, 1
+    shl eax, 15
+    cvtsi2ss xmm1, eax
+    mulss xmm0, xmm1
+    cvtss2si rax, xmm0
+
+    
+
+
+
+    
+
+
+
+
+
+
