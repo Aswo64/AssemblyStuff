@@ -166,10 +166,10 @@ handle_paint:
     lea rdx, [rsp + 40]
     call BeginPaint
 
-    mov rcx, 200
-    mov rdx, 200
-    mov r8, 400
-    mov r9, 800
+    mov rcx, 1
+    mov rdx, 1
+    mov r8, 500
+    mov r9, 400
     call draw_line
 
     ; mov rcx, rax
@@ -291,6 +291,11 @@ draw_line:
 
     jmp .again
 .done:
+    mov rcx, r13
+    mov rdx, 90
+    mov r8, 400
+    mov r9d, 0xFF
+    call SetPixel
     pop r15
     pop r14
     pop r13
