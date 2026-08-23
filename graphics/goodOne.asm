@@ -166,11 +166,17 @@ handle_paint:
     lea rdx, [rsp + 40]
     call BeginPaint
 
-    mov rcx, rax
-    mov rdx, [pixel_x]
-    mov r8, [pixel_y]
-    mov r9d, 0x000000FF
-    call SetPixel
+    mov rcx, 200
+    mov rdx, 200
+    mov r8, 400
+    mov r9, 800
+    call draw_line
+
+    ; mov rcx, rax
+    ; mov rdx, [pixel_x]
+    ; mov r8, [pixel_y]
+    ; mov r9d, 0x000000FF
+    ; call SetPixel
 
     mov rcx, [rsp + 32]
     lea rdx, [rsp + 40]
@@ -207,16 +213,33 @@ new_thread:
     xor rax, rax
     jmp new_thread
 
+; rax = HDC
 ; rcx = x0
 ; rdx = y0
 ; r8 = x1
 ; r9 = y1
 draw_line:
-    sub rsp, 32
-    mov [rsp], rcx
-    mov [rsp+8], rdx
-    mov [rsp+16], r8
-    mov [rsp+24], r9
+; this function is indirectly being called by windows, therefore if we use non-volatile registers, we must return them back when done, a.k.a popping these back when done
+; also pushing two is best as each register has 8 bytes, and we need the 16 byte alignment, so pushing two aligns it properly for setPixel function to work
+    push rbx
+    push rdi
+    push rsi 
+    push r12
+    push r13
+    push r14
+    push r15
+
+; Instead of 32, had to do 40 since using r15 madeit not 16-byte aligned, so i added 8 bytes on top of 32 to get 40
+    sub rsp, 40
+
+; rbx = x0
+    mov rbx, rcx
+; rdi = y0
+    mov rdi, rdx
+; rsi = x1
+    mov rsi, r8
+; r13 = HDC
+    mov r13, rax
 
     sub r9, rdx
     sub r8, rcx
@@ -227,7 +250,60 @@ draw_line:
     shl eax, 15
     cvtsi2ss xmm1, eax
     mulss xmm0, xmm1
-    cvtss2si rax, xmm0
+; we put the integer representation of the fraction in r12
+    cvtss2si r12, xmm0
+
+; r14 is the accumulator, do NOT touch it
+    xor r14, r14
+
+.again:
+    inc rbx
+
+    cmp rbx, rsi
+    je .done
+
+    add r14, r12
+
+    cmp r14, 32768
+    jb .calculate 
+    sub r14, 32768
+    inc rdi
+
+.calculate:
+; calculating brightness using rdx, try not to touch it
+    mov r15, r14
+    shr r15, 7
+
+    mov rcx, r13
+    mov rdx, rbx
+    mov r8, rdi
+    mov r9d, r15d
+    call SetPixel
+
+    mov rcx, r13
+    mov rdx, rbx
+    mov r8, rdi
+    inc r8
+    neg r15
+    add r15, 255
+    mov r9d, r15d
+    call SetPixel
+
+    jmp .again
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi 
+    pop rdi
+    pop rbx
+    leave 
+    ret
+
+
+
+
 
     
 
