@@ -20,6 +20,9 @@ extern EndPaint
 extern CreateThread
 extern ExitThread
 extern UpdateWindow
+extern GetClientRect
+extern GetStockObject
+extern FillRect
 
 section .data
     window_class_name db "MyWin64Class", 0
@@ -53,6 +56,10 @@ main:
     lea rax, [window_class_name]
     mov qword [wnd_class + 64], rax
 
+    mov ecx, 4
+    call GetStockObject
+    mov [wnd_class+48], rax
+
     lea rcx, [wnd_class]
     call RegisterClassExA
 
@@ -60,6 +67,7 @@ main:
     lea rdx, [window_class_name]
     lea r8, [window_title]
     mov r9d, 0x10CF0000
+    
 
     mov dword [rsp + 32], 600
     mov dword [rsp + 40], 350
@@ -169,7 +177,7 @@ handle_paint:
     mov rcx, 1
     mov rdx, 1
     mov r8, 500
-    mov r9, 400
+    mov r9, [pixel_y]
     call draw_line
 
     ; mov rcx, rax
@@ -202,7 +210,7 @@ new_thread:
 
     mov rcx, [hwnd]
     xor rdx, rdx
-    mov r8, 0
+    mov r8, 1
     call InvalidateRect
     mov rcx, [hwnd]
     call UpdateWindow
@@ -223,7 +231,7 @@ draw_line:
 ; also pushing two is best as each register has 8 bytes, and we need the 16 byte alignment, so pushing two aligns it properly for setPixel function to work
     push rbx
     push rdi
-    push rsi 
+    push rsi
     push r12
     push r13
     push r14
@@ -238,11 +246,24 @@ draw_line:
     mov rdi, rdx
 ; rsi = x1
     mov rsi, r8
+; r15 = y1
+    mov r15, r9
 ; r13 = HDC
     mov r13, rax
 
     sub r9, rdx
     sub r8, rcx
+    
+    mov rdx, r9
+    neg r9
+    cmovs r9, rdx
+
+    mov rdx, r8
+    neg r8
+    cmovs r8, rdx
+    
+    cmp r9, r8
+    ja .reciprocal
     cvtsi2ss xmm0, r9
     cvtsi2ss xmm1, r8
     divss xmm0, xmm1
@@ -252,11 +273,28 @@ draw_line:
     mulss xmm0, xmm1
 ; we put the integer representation of the fraction in r12
     cvtss2si r12, xmm0
-
 ; r14 is the accumulator, do NOT touch it
     xor r14, r14
+    jmp .again_x
 
-.again:
+.reciprocal:
+    cvtsi2ss xmm0, r8
+    cvtsi2ss xmm1, r9
+    divss xmm0, xmm1
+    mov eax, 1
+    shl eax, 15
+    cvtsi2ss xmm1, eax
+    mulss xmm0, xmm1
+    cvtss2si r12, xmm0
+
+    xchg rbx, rdi
+    mov rsi, r15
+; r14 is the accumulator, do NOT touch it
+    xor r14, r14
+    jmp .again_y
+
+
+.again_x:
     inc rbx
 
     cmp rbx, rsi
@@ -265,37 +303,90 @@ draw_line:
     add r14, r12
 
     cmp r14, 32768
-    jb .calculate 
+    jb .calculatex
     sub r14, 32768
     inc rdi
 
-.calculate:
+.calculatex:
 ; calculating brightness using rdx, try not to touch it
     mov r15, r14
     shr r15, 7
 
-    mov rcx, r13
-    mov rdx, rbx
-    mov r8, rdi
-    mov r9d, r15d
-    call SetPixel
+    
 
     mov rcx, r13
     mov rdx, rbx
     mov r8, rdi
     inc r8
+    mov r9d, r15d
+    call SetPixel
+
+    mov rcx, r13
+    mov rdx, rbx
+    mov r8, rdi
     neg r15
     add r15, 255
     mov r9d, r15d
     call SetPixel
 
-    jmp .again
-.done:
+    jmp .again_x
+
+
+.again_y:
+    inc rbx
+
+    cmp rbx, rsi
+    je .done
+
+    add r14, r12
+
+    cmp r14, 32768
+    jb .calculatey
+    sub r14, 32768
+    inc rdi
+
+.calculatey:
+; calculating brightness using rdx, try not to touch it
+    mov r15, r14
+    shr r15, 7
+
     mov rcx, r13
-    mov rdx, 90
-    mov r8, 400
-    mov r9d, 0xFF
+    mov rdx, rdi
+    inc rdx
+    mov r8, rbx
+    mov r9d, r15d
     call SetPixel
+
+    mov rcx, r13
+    mov rdx, rdi
+    mov r8, rbx
+    neg r15
+    add r15, 255
+    mov r9d, r15d
+    call SetPixel
+
+    
+
+    jmp .again_y
+
+.done:
+
+    ; sub rsp, 40h
+
+    ; mov rcx, [hwnd]
+    ; lea rdx, [rsp+20h]
+    ; call GetClientRect
+
+    ; mov ecx, 4 
+    ; call GetStockObject
+
+    ; mov r8, rax
+    ; lea rdx, [rsp+20h]
+    ; mov rcx, r13
+    ; call FillRect
+
+    ; add rsp, 40h
+
     pop r15
     pop r14
     pop r13
@@ -305,19 +396,3 @@ draw_line:
     pop rbx
     leave 
     ret
-
-
-
-
-
-    
-
-
-
-    
-
-
-
-
-
-
