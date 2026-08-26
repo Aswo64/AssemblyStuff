@@ -174,10 +174,10 @@ handle_paint:
     lea rdx, [rsp + 40]
     call BeginPaint
 
-    mov rcx, 1
-    mov rdx, 1
-    mov r8, 500
-    mov r9, [pixel_y]
+    mov rcx, 100
+    mov rdx, 100
+    mov r8, 102
+    mov r9, 200
     call draw_line
 
     ; mov rcx, rax
@@ -227,6 +227,8 @@ new_thread:
 ; r8 = x1
 ; r9 = y1
 draw_line:
+; Instead of 32, had to do 40 since using r15 madeit not 16-byte aligned, so i added 8 bytes on top of 32 to get 40
+    sub rsp, 40
 ; this function is indirectly being called by windows, therefore if we use non-volatile registers, we must return them back when done, a.k.a popping these back when done
 ; also pushing two is best as each register has 8 bytes, and we need the 16 byte alignment, so pushing two aligns it properly for setPixel function to work
     push rbx
@@ -237,9 +239,7 @@ draw_line:
     push r14
     push r15
 
-; Instead of 32, had to do 40 since using r15 madeit not 16-byte aligned, so i added 8 bytes on top of 32 to get 40
-    sub rsp, 40
-
+    
 ; rbx = x0
     mov rbx, rcx
 ; rdi = y0
@@ -248,6 +248,21 @@ draw_line:
     mov rsi, r8
 ; r15 = y1
     mov r15, r9
+
+
+    mov r12, rcx
+    mov r13, r8
+
+    sub r12, r13
+    js .continue
+
+    xchg rbx, rsi
+    xchg rcx, r8
+    xchg rdi, r15
+    xchg r9, rdx
+    
+
+.continue:
 ; r13 = HDC
     mov r13, rax
 
@@ -258,14 +273,14 @@ draw_line:
     neg r9
     cmovs r9, rdx
 
-    mov rdx, r8
+    mov rcx, r8
     neg r8
-    cmovs r8, rdx
+    cmovs r8, rcx
     
     cmp r9, r8
     ja .reciprocal
-    cvtsi2ss xmm0, r9
-    cvtsi2ss xmm1, r8
+    cvtsi2ss xmm0, rdx
+    cvtsi2ss xmm1, rcx
     divss xmm0, xmm1
     mov eax, 1
     shl eax, 15
@@ -275,11 +290,19 @@ draw_line:
     cvtss2si r12, xmm0
 ; r14 is the accumulator, do NOT touch it
     xor r14, r14
+
+    test r12, r12
+    js .negative_x
+
     jmp .again_x
 
+.negative_x:
+    neg r12
+    jmp .again_x_down
+
 .reciprocal:
-    cvtsi2ss xmm0, r8
-    cvtsi2ss xmm1, r9
+    cvtsi2ss xmm0, rcx
+    cvtsi2ss xmm1, rdx
     divss xmm0, xmm1
     mov eax, 1
     shl eax, 15
@@ -288,10 +311,19 @@ draw_line:
     cvtss2si r12, xmm0
 
     xchg rbx, rdi
+; Instead of seeing x0 = x1, we now see if y0 = y1
     mov rsi, r15
 ; r14 is the accumulator, do NOT touch it
     xor r14, r14
+    
+    test r12, r12
+    js .negative_y
+
     jmp .again_y
+
+.negative_y:
+    neg r12,
+    jmp .again_y_down
 
 
 .again_x:
@@ -312,8 +344,6 @@ draw_line:
     mov r15, r14
     shr r15, 7
 
-    
-
     mov rcx, r13
     mov rdx, rbx
     mov r8, rdi
@@ -330,6 +360,45 @@ draw_line:
     call SetPixel
 
     jmp .again_x
+
+
+.again_x_down:
+    inc rbx
+
+    cmp rbx, rsi
+    je .done
+
+    add r14, r12
+
+    cmp r14, 32768
+    jb .calculatex_down
+    sub r14, 32768
+    dec rdi
+
+.calculatex_down:
+; calculating brightness using rdx, try not to touch it
+    mov r15, r14
+    shr r15, 7
+
+    mov rcx, r13
+    mov rdx, rbx
+    mov r8, rdi
+    dec r8
+    mov r9d, r15d
+    call SetPixel
+
+    mov rcx, r13
+    mov rdx, rbx
+    mov r8, rdi
+    neg r15
+    add r15, 255
+    mov r9d, r15d
+    call SetPixel
+
+    jmp .again_x_down
+
+
+
 
 
 .again_y:
@@ -365,9 +434,42 @@ draw_line:
     mov r9d, r15d
     call SetPixel
 
-    
-
     jmp .again_y
+
+.again_y_down:
+    dec rbx
+
+    cmp rbx, rsi
+    je .done
+
+    add r14, r12
+
+    cmp r14, 32768
+    jb .calculatey_down
+    sub r14, 32768
+    inc rdi
+
+.calculatey_down:
+; calculating brightness using rdx, try not to touch it
+    mov r15, r14
+    shr r15, 7
+
+    mov rcx, r13
+    mov rdx, rdi
+    inc rdx
+    mov r8, rbx
+    mov r9d, r15d
+    call SetPixel
+
+    mov rcx, r13
+    mov rdx, rdi
+    mov r8, rbx
+    neg r15
+    add r15, 255
+    mov r9d, r15d
+    call SetPixel
+
+    jmp .again_y_down
 
 .done:
 
