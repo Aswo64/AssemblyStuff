@@ -203,11 +203,14 @@ new_thread:
     xor rax, rax
     jmp new_thread
 
+
+
 ; rax = HDC
 ; rcx = x0
 ; rdx = y0
 ; r8 = x1
 ; r9 = y1
+; Draws line wow 
 draw_line:
 ; Instead of 32, had to do 40 since using r15 madeit not 16-byte aligned, so i added 8 bytes on top of 32 to get 40
     sub rsp, 40
