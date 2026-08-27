@@ -165,7 +165,6 @@ window_procedure:
 
 
 handle_timer:
-
     inc qword [pixel_x]
 
     mov rcx, [hwnd]

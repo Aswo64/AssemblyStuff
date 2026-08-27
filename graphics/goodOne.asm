@@ -176,7 +176,7 @@ handle_paint:
 
     mov rcx, 100
     mov rdx, 100
-    mov r8, 102
+    mov r8, [pixel_x]
     mov r9, 200
     call draw_line
 
@@ -215,7 +215,7 @@ new_thread:
     mov rcx, [hwnd]
     call UpdateWindow
 
-    mov ecx, 10
+    mov ecx, 100
     call Sleep
 
     xor rax, rax
@@ -248,6 +248,11 @@ draw_line:
     mov rsi, r8
 ; r15 = y1
     mov r15, r9
+; r13 = HDC
+    mov r13, rax
+
+    cmp rbx, rsi
+    je .vert_line
 
 
     mov r12, rcx
@@ -263,8 +268,7 @@ draw_line:
     
 
 .continue:
-; r13 = HDC
-    mov r13, rax
+
 
     sub r9, rdx
     sub r8, rcx
@@ -471,24 +475,39 @@ draw_line:
 
     jmp .again_y_down
 
+; rdi = y0
+; r15 = y1
+.vert_line:
+    cmp rdi, r15
+    jb .vert_line_up
+    jmp .vert_line_down
+    
+
+.vert_line_up:
+    cmp rdi, r15
+    je .done
+    inc rdi
+    mov rcx, r13
+    mov rdx, rbx
+    mov r8, rdi
+    mov r9d, 0xFF
+    call SetPixel
+    jmp .vert_line_up
+
+
+.vert_line_down:
+    cmp rdi, r15
+    je .done
+    dec rdi
+    mov rcx, r13
+    mov rdx, rbx
+    mov r8, rdi
+    mov r9d, 0xFF
+    call SetPixel
+    jmp .vert_line_down
+
+
 .done:
-
-    ; sub rsp, 40h
-
-    ; mov rcx, [hwnd]
-    ; lea rdx, [rsp+20h]
-    ; call GetClientRect
-
-    ; mov ecx, 4 
-    ; call GetStockObject
-
-    ; mov r8, rax
-    ; lea rdx, [rsp+20h]
-    ; mov rcx, r13
-    ; call FillRect
-
-    ; add rsp, 40h
-
     pop r15
     pop r14
     pop r13
