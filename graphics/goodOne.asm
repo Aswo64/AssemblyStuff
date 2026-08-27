@@ -101,18 +101,6 @@ main:
     ; call SetTimer
 
 message_loop:
-    ; lea rcx, [msg]
-    ; xor rdx, rdx
-    ; xor r8, r8
-    ; xor r9, r9
-    ; call GetMessageA
-    ; cmp rax, 0
-    ; jle exit_program
-
-    ; lea rcx, [msg]
-    ; call DispatchMessageA
-    ; jmp message_loop
-
     lea rcx, [msg]
     xor rdx, rdx
     xor r8, r8
@@ -177,14 +165,8 @@ handle_paint:
     mov rcx, 100
     mov rdx, 100
     mov r8, [pixel_x]
-    mov r9, 200
+    mov r9, 100
     call draw_line
-
-    ; mov rcx, rax
-    ; mov rdx, [pixel_x]
-    ; mov r8, [pixel_y]
-    ; mov r9d, 0x000000FF
-    ; call SetPixel
 
     mov rcx, [rsp + 32]
     lea rdx, [rsp + 40]
@@ -215,7 +197,7 @@ new_thread:
     mov rcx, [hwnd]
     call UpdateWindow
 
-    mov ecx, 100
+    mov ecx, 10
     call Sleep
 
     xor rax, rax
@@ -254,11 +236,10 @@ draw_line:
     cmp rbx, rsi
     je .vert_line
 
-
     mov r12, rcx
-    mov r13, r8
+    mov r14, r8
 
-    sub r12, r13
+    sub r12, r14
     js .continue
 
     xchg rbx, rsi
@@ -268,8 +249,6 @@ draw_line:
     
 
 .continue:
-
-
     sub r9, rdx
     sub r8, rcx
     
@@ -478,6 +457,9 @@ draw_line:
 ; rdi = y0
 ; r15 = y1
 .vert_line:
+;     cmp r15, rbx
+;     je .point_perchance 
+; .nvm_frown:
     cmp rdi, r15
     jb .vert_line_up
     jmp .vert_line_down
@@ -506,8 +488,17 @@ draw_line:
     call SetPixel
     jmp .vert_line_down
 
+; .point_perchance:
+;     cmp r15, rdi
+;     jne .nvm_frown
+;     mov rcx, r13
+;     mov rdx, rbx
+;     mov r8, rdi
+;     mov r9d, 0xFF
+;     call SetPixel
 
 .done:
+    mov rax, r13
     pop r15
     pop r14
     pop r13
