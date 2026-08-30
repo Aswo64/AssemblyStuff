@@ -33,9 +33,7 @@ extern BitBlt
 extern PatBlt
 extern AdjustWindowRectEx
 
-;658x520 = 640x480 bcs of window borders and title bar
-; %define wnd_length 658
-; %define wnd_width 520
+; 658x520 = 640x480 bcs of window borders and title bar
 
 section .data
     window_class_name db "MyWin64Class", 0
@@ -50,6 +48,7 @@ section .data
     pixel_y         dq 240
     wnd_length      dd 0
     wnd_width       dd 0
+    keys_on       db 0
     window_size:
         dd 0
         dd 0
@@ -89,6 +88,7 @@ section .bss
     backbuffer_dc      resq 1
     backbuffer_bitmap  resq 1
     old_bitmap         resq 1
+    
 
 section .text
 global main
@@ -250,6 +250,10 @@ window_procedure:
     je handle_timer
     cmp rdx, 0x00FF
     je handle_mouse
+    cmp rdx, 0x0100
+    je key_down
+    cmp rdx, 0x0101
+    je key_up
 
 default_processing:
     call DefWindowProcA
@@ -293,7 +297,6 @@ handle_paint:
     ; [rsp +112]  = PAINTSTRUCT (72 bytes)
     ; [rsp + 32..64] are for wtvs
 
-
     sub rsp, 192
 
     mov [rsp + 80], rcx
@@ -334,6 +337,7 @@ handle_paint:
     mov dword [rsp + 64], 0x00CC0020       ; SRCCOPY
     call BitBlt
 
+
     mov rcx, [rsp + 80]
     lea rdx, [rsp + 112]
     call EndPaint
@@ -342,6 +346,71 @@ handle_paint:
     xor eax, eax
     leave
     ret
+
+key_down:
+    cmp r8, 0x57
+    je .w_pressed
+    cmp r8, 0x53
+    je .s_pressed
+    cmp r8, 0x41
+    je .a_pressed
+    cmp r8, 0x44
+    je .d_pressed
+
+    jmp .done
+
+.w_pressed:
+    or byte [keys_on], 00000001b
+    jmp .done
+
+.s_pressed:
+    or byte [keys_on], 00000010b
+    jmp .done
+
+.a_pressed:
+    or byte [keys_on], 00000100b
+    jmp .done
+
+.d_pressed:
+    or byte [keys_on], 00001000b
+    jmp .done
+    
+.done:
+    leave 
+    ret
+
+key_up:
+    cmp r8, 0x57
+    je .w_pressed
+    cmp r8, 0x53
+    je .s_pressed
+    cmp r8, 0x41
+    je .a_pressed
+    cmp r8, 0x44
+    je .d_pressed
+
+    jmp .done
+
+.w_pressed:
+    and byte [keys_on], 11111110b
+    jmp .done
+
+.s_pressed:
+    and byte [keys_on], 11111101b
+    jmp .done
+
+.a_pressed:
+    and byte [keys_on], 11111011b
+    jmp .done
+
+.d_pressed:
+    and byte [keys_on], 11110111b
+    jmp .done
+    
+.done:
+    leave 
+    ret
+
 
 
 handle_destroy:
@@ -354,15 +423,37 @@ handle_destroy:
 new_thread:
     sub rsp, 40
 .loop:
-    ; inc qword [pixel_x]
-    ; inc qword [pixel_y]
+    ; Including this skip will stop rendering for the mouse movement, will still change the bitmap in the back tho
+    cmp byte [keys_on], 0
+    je .skip
 
+    test byte [keys_on], 00000001b
+    jz .forward
+    dec qword [pixel_y]
+.forward:
+    test byte [keys_on], 00000010b
+    jz .back
+    inc qword [pixel_y]
+.back:
+    test byte [keys_on], 00000100b
+    jz .left
+    dec qword [pixel_x]
+.left:
+    test byte [keys_on], 00001000b
+    jz .continue
+    inc qword [pixel_x]
+
+
+
+
+.continue:
     mov rcx, [hwnd]
     xor rdx, rdx
     mov r8, 0
     call InvalidateRect
     mov rcx, [hwnd]
     call UpdateWindow
+.skip:
 
     mov ecx, 10
     call Sleep
