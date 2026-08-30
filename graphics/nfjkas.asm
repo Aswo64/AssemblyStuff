@@ -25,12 +25,36 @@ extern GetStockObject
 extern FillRect
 extern GetRawInputData
 extern RegisterRawInputDevices
+extern CreateCompatibleDC
+extern CreateCompatibleBitmap
+extern SelectObject
+extern DeleteDC
+extern BitBlt
+extern PatBlt
+extern AdjustWindowRectEx
+
+;658x520 = 640x480 bcs of window borders and title bar
+; %define wnd_length 658
+; %define wnd_width 520
 
 section .data
     window_class_name db "MyWin64Class", 0
     window_title      db "za windows", 0
-    pixel_x         dq 20
-    pixel_y         dq 20
+    mouse_raw_input_device:
+        dw 1
+        dw 2
+        ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
+        dd 256
+        dq 0
+    pixel_x         dq 320
+    pixel_y         dq 240
+    wnd_length      dd 0
+    wnd_width       dd 0
+    window_size:
+        dd 0
+        dd 0
+        dd 620
+        dd 480
     v_coords:
         dd 0.25, 0.25, -0.25
         dd -0.25, 0.25, -0.25
@@ -60,6 +84,11 @@ section .bss
     hwnd        resq    1
     wnd_class   resb    80
     msg         resb    48
+    input_buffer resb 64
+    input_buffer_size resd 64
+    backbuffer_dc      resq 1
+    backbuffer_bitmap  resq 1
+    old_bitmap         resq 1
 
 section .text
 global main
@@ -68,11 +97,29 @@ main:
     mov rbp, rsp
     sub rsp, 96
 
+    ; Uses a windows API to change the window size to make the client area what i actually want, the borders and titles mess it up so this fixes it, however if i want to change to fullscreen, i have to change it
+    ; bcs then the values given will acc be the client area
+    lea rcx, [window_size]
+    mov edx, 0x10CF0000
+    xor r8d, r8d
+    xor r9d, r9d
+    call AdjustWindowRectEx
+
+    ; Actually calculating and putting the values in memory 
+    mov eax, [window_size + 8]
+    sub eax, [window_size + 0]
+    mov [wnd_length], eax
+
+    mov edx, [window_size + 12]
+    sub edx, [window_size + 4]
+    mov [wnd_width], edx
+
     mov rdi, wnd_class
     xor rax, rax
     mov rcx, 10
     rep stosq
 
+    ; Setting up the window class
     mov dword [wnd_class], 80
     mov dword [wnd_class + 4], 3
     
@@ -82,6 +129,7 @@ main:
     lea rax, [window_class_name]
     mov qword [wnd_class + 64], rax
 
+    ; This gives the class a black brush
     mov ecx, 4
     call GetStockObject
     mov [wnd_class+48], rax
@@ -95,22 +143,56 @@ main:
     mov r9d, 0x10CF0000
     
 
-    mov dword [rsp + 32], 600
+    mov dword [rsp + 32], 640
     mov dword [rsp + 40], 350
-    mov dword [rsp + 48], 640
-    mov dword [rsp + 56], 480
+    mov eax, [wnd_length]
+    mov dword [rsp + 48], eax
+    mov eax, [wnd_width]
+    mov dword [rsp + 56], eax
     mov qword [rsp + 64], 0
     mov qword [rsp + 72], 0
     mov qword [rsp + 80], 0
     mov qword [rsp + 88], 0
     call CreateWindowExA
-
     mov [hwnd], rax
-    mov rcx, rax
-    mov rdx, 5
+    
+    ; Making a new DC and bitmap to draw on, for later drawing, here we make a DC, which is like a header for a bitmap, the new DC refers to the already existing Window DC
+    ; because it basically copies the window DC settings
+    ; Then we make the bitmap, and link the just made DC with the bitmap 
+    mov rcx, [hwnd]
+    call GetDC
+    mov r15, rax
+
+    mov rcx, r15
+    call CreateCompatibleDC
+    mov [backbuffer_dc], rax
+
+    mov rcx, r15
+    mov edx, 640
+    mov r8d, 480
+    call CreateCompatibleBitmap
+    mov [backbuffer_bitmap], rax
+
+    mov rcx, [backbuffer_dc]
+    mov rdx, [backbuffer_bitmap]
+    call SelectObject
+    mov [old_bitmap], rax
+
+    mov rcx, [hwnd]
+    mov rdx, r15
+    call ReleaseDC
+
+    mov rcx, [hwnd]
+    mov edx, 5
     call ShowWindow
 
-
+    ; Registering the mouse as a raw input device, this is so we can get the mouse movement even if the mouse is outside or not focused on the window
+    mov rax, [hwnd]
+    mov [mouse_raw_input_device + 8], rax
+    lea rcx, [mouse_raw_input_device]
+    mov edx, 1
+    mov r8d, 16
+    call RegisterRawInputDevices
 
 
 
@@ -166,10 +248,29 @@ window_procedure:
     je handle_paint
     cmp rdx, 0x0113
     je handle_timer
+    cmp rdx, 0x00FF
+    je handle_mouse
 
 default_processing:
     call DefWindowProcA
     leave
+    ret
+
+handle_mouse:
+    mov rcx, r9
+    mov edx, 0x10000003
+    lea r8, [input_buffer]
+    lea r9, [input_buffer_size]
+    mov dword [rsp+32], 24
+    call GetRawInputData
+
+    movsxd rax, dword [input_buffer + 36]
+    add [pixel_x], rax
+    movsxd rax, dword [input_buffer + 40]
+    add [pixel_y], rax
+
+    xor rax, rax
+    leave 
     ret
 
 
@@ -187,23 +288,57 @@ handle_timer:
     ret
 
 handle_paint:
-    sub rsp, 112
+    ; [rsp + 80]  = HWND
+    ; [rsp + 88]  = window HDC
+    ; [rsp +112]  = PAINTSTRUCT (72 bytes)
+    ; [rsp + 32..64] are for wtvs
 
-    mov [rsp + 32], rcx
-    lea rdx, [rsp + 40]
+
+    sub rsp, 192
+
+    mov [rsp + 80], rcx
+    lea rdx, [rsp + 112]
     call BeginPaint
+    mov [rsp + 88], rax
 
-    mov rcx, 100
-    mov rdx, 100
-    mov r8, 100
-    mov r9, -100
+
+    mov rcx, [backbuffer_dc]
+    xor edx, edx
+    xor r8d, r8d
+    mov r9d, [wnd_length]
+    mov eax, [wnd_width]
+    mov dword [rsp + 32], eax
+    mov dword [rsp + 40], 0x00000042       ; BLACKNESS
+    call PatBlt
+
+
+
+    mov rax, [backbuffer_dc]
+    mov rcx, 620
+    mov rdx, 480
+    mov r8, [pixel_x]
+    mov r9, [pixel_y]
     call draw_line
 
-    mov rcx, [rsp + 32]
-    lea rdx, [rsp + 40]
+
+    mov rcx, [rsp + 88]
+    xor edx, edx
+    xor r8d, r8d
+    mov r9d, [wnd_length]
+    mov eax, [wnd_width]
+    mov dword [rsp + 32], eax
+    mov rax, [backbuffer_dc]
+    mov qword [rsp + 40], rax
+    mov qword [rsp + 48], 0
+    mov qword [rsp + 56], 0
+    mov dword [rsp + 64], 0x00CC0020       ; SRCCOPY
+    call BitBlt
+
+    mov rcx, [rsp + 80]
+    lea rdx, [rsp + 112]
     call EndPaint
 
-    add rsp, 112
+    add rsp, 192
     xor eax, eax
     leave
     ret
@@ -224,7 +359,7 @@ new_thread:
 
     mov rcx, [hwnd]
     xor rdx, rdx
-    mov r8, 1
+    mov r8, 0
     call InvalidateRect
     mov rcx, [hwnd]
     call UpdateWindow
@@ -312,6 +447,19 @@ draw_line:
     ; r14 is the accumulator, do NOT touch it
         xor r14, r14
 
+    ; These two pixel drawings are for endpoints
+        mov rcx, r13
+        mov rdx, rbx
+        mov r8, rdi
+        mov r9d, 0xFF
+        call SetPixel
+
+        mov rcx, r13
+        mov rdx, rsi
+        mov r8, r15
+        mov r9d, 0xFF
+        call SetPixel
+
         test r12, r12
         js .negative_x
 
@@ -331,12 +479,25 @@ draw_line:
         mulss xmm0, xmm1
         cvtss2si r12, xmm0
 
+    ; These two pixel drawings are for endpoints, but before we exchange the major axis and change the break case to make it w.r.t y 
+        mov rcx, r13
+        mov rdx, rbx
+        mov r8, rdi
+        mov r9d, 0xFF
+        call SetPixel
+
+        mov rcx, r13
+        mov rdx, rsi
+        mov r8, r15
+        mov r9d, 0xFF
+        call SetPixel
+
         xchg rbx, rdi
     ; Instead of seeing x0 = x1, we now see if y0 = y1
         mov rsi, r15
     ; r14 is the accumulator, do NOT touch it
         xor r14, r14
-        
+
         test r12, r12
         js .negative_y
 
@@ -349,9 +510,9 @@ draw_line:
 
     .again_x:
 
+        inc rbx
         cmp rbx, rsi
         je .done
-        inc rbx
 
         add r14, r12
 
@@ -384,10 +545,10 @@ draw_line:
 
 
     .again_x_down:
+        inc rbx
 
         cmp rbx, rsi
         je .done
-        inc rbx
 
         add r14, r12
 
@@ -419,14 +580,11 @@ draw_line:
         jmp .again_x_down
 
 
-
-
-
     .again_y:
+        inc rbx
 
         cmp rbx, rsi
         je .done
-        inc rbx
 
         add r14, r12
 
@@ -458,10 +616,10 @@ draw_line:
         jmp .again_y
 
     .again_y_down:
+        dec rbx
 
         cmp rbx, rsi
         je .done
-        dec rbx
 
         add r14, r12
 
@@ -499,8 +657,8 @@ draw_line:
     ;     je .point_perchance 
     ; .nvm_frown:
         cmp rdi, r15
-    ; Previously used jb instead of jl, but jb only works with unsigned integers (only positive numbers), 
-    ; so here, theres no harm to use jl, as if x is negative, it will cause for an infinite loop
+        ; Previously used jb instead of jl, but jb only works with unsigned integers (only positive numbers), 
+        ; so here, theres no harm to use jl, as if x is negative, it will cause for an infinite loop
         jl .vert_line_up
         jmp .vert_line_down
         

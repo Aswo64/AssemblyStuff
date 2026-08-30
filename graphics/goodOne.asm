@@ -89,6 +89,7 @@ main:
     lea rax, [window_class_name]
     mov qword [wnd_class + 64], rax
 
+    ; This feeds the 
     mov ecx, 4
     call GetStockObject
     mov [wnd_class+48], rax
