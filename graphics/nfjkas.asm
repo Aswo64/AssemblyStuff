@@ -230,8 +230,8 @@ message_loop:
     call DispatchMessageA
     jmp message_loop
 
-.go_again:
-    jmp message_loop
+    .go_again:
+        jmp message_loop
 
 exit_program:
     xor rcx, rcx
@@ -348,6 +348,8 @@ handle_paint:
     leave
     ret
 
+
+
 key_down:
     cmp r8, 0x57
     je .w_pressed
@@ -360,25 +362,25 @@ key_down:
 
     jmp .done
 
-.w_pressed:
-    or byte [keys_on], 00000001b
-    jmp .done
+    .w_pressed:
+        or byte [keys_on], 00000001b
+        jmp .done
 
-.s_pressed:
-    or byte [keys_on], 00000010b
-    jmp .done
+    .s_pressed:
+        or byte [keys_on], 00000010b
+        jmp .done
 
-.a_pressed:
-    or byte [keys_on], 00000100b
-    jmp .done
+    .a_pressed:
+        or byte [keys_on], 00000100b
+        jmp .done
 
-.d_pressed:
-    or byte [keys_on], 00001000b
-    jmp .done
-    
-.done:
-    leave 
-    ret
+    .d_pressed:
+        or byte [keys_on], 00001000b
+        jmp .done
+        
+    .done:
+        leave 
+        ret
 
 key_up:
     cmp r8, 0x57
@@ -392,25 +394,25 @@ key_up:
 
     jmp .done
 
-.w_pressed:
-    and byte [keys_on], 11111110b
-    jmp .done
+    .w_pressed:
+        and byte [keys_on], 11111110b
+        jmp .done
 
-.s_pressed:
-    and byte [keys_on], 11111101b
-    jmp .done
+    .s_pressed:
+        and byte [keys_on], 11111101b
+        jmp .done
 
-.a_pressed:
-    and byte [keys_on], 11111011b
-    jmp .done
+    .a_pressed:
+        and byte [keys_on], 11111011b
+        jmp .done
 
-.d_pressed:
-    and byte [keys_on], 11110111b
-    jmp .done
-    
-.done:
-    leave 
-    ret
+    .d_pressed:
+        and byte [keys_on], 11110111b
+        jmp .done
+        
+    .done:
+        leave 
+        ret
 
 
 
@@ -423,44 +425,44 @@ handle_destroy:
 
 new_thread:
     sub rsp, 40
-.loop:
-    ; Including this skip will stop rendering for the mouse movement, will still change the bitmap in the back tho
-    cmp byte [keys_on], 0
-    je .skip
+    .loop:
+        ; Including this skip will stop rendering for the mouse movement, will still change the bitmap in the back tho
+        cmp byte [keys_on], 0
+        je .skip
 
-    test byte [keys_on], 00000001b
-    jz .forward
-    dec qword [pixel_y]
-.forward:
-    test byte [keys_on], 00000010b
-    jz .back
-    inc qword [pixel_y]
-.back:
-    test byte [keys_on], 00000100b
-    jz .left
-    dec qword [pixel_x]
-.left:
-    test byte [keys_on], 00001000b
-    jz .continue
-    inc qword [pixel_x]
-
-
+        test byte [keys_on], 00000001b
+        jz .forward
+        dec qword [pixel_y]
+    .forward:
+        test byte [keys_on], 00000010b
+        jz .back
+        inc qword [pixel_y]
+    .back:
+        test byte [keys_on], 00000100b
+        jz .left
+        dec qword [pixel_x]
+    .left:
+        test byte [keys_on], 00001000b
+        jz .continue
+        inc qword [pixel_x]
 
 
-.continue:
-    mov rcx, [hwnd]
-    xor rdx, rdx
-    mov r8, 0
-    call InvalidateRect
-    mov rcx, [hwnd]
-    call UpdateWindow
-.skip:
 
-    mov ecx, 10
-    call Sleep
 
-    xor rax, rax
-    jmp .loop
+    .continue:
+        mov rcx, [hwnd]
+        xor rdx, rdx
+        mov r8, 0
+        call InvalidateRect
+        mov rcx, [hwnd]
+        call UpdateWindow
+    .skip:
+
+        mov ecx, 10
+        call Sleep
+
+        xor rax, rax
+        jmp .loop
 
 
 
