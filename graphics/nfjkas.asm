@@ -44,8 +44,8 @@ section .data
         ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
         dd 256
         dq 0
-    pixel_x         dq 320
-    pixel_y         dq 240
+    pixel_x         dq 0
+    pixel_y         dq 0
     wnd_length      dd 0
     wnd_width       dd 0
     keys_on       db 0
@@ -155,6 +155,7 @@ main:
     mov qword [rsp + 88], 0
     call CreateWindowExA
     mov [hwnd], rax
+    
     
     ; Making a new DC and bitmap to draw on, for later drawing, here we make a DC, which is like a header for a bitmap, the new DC refers to the already existing Window DC
     ; because it basically copies the window DC settings
