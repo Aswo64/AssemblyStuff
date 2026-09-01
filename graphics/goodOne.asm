@@ -61,6 +61,33 @@ section .data
         dd  4, 7, 8
 
 
+
+        ; mov r8, rsi 
+        ; imul r8, 12
+        ; mov eax, [f_coords + r8 + rbx*4]
+        ; dec eax
+        ; imul eax, 12
+        ; mov ecx, [v_coords + eax]
+        ; mov r9, rbx
+        ; imul r9, 12
+        ; mov [third_array + r9], ecx
+
+        ; mov ecx, [v_coords + eax + 4]
+        ; mov [third_array + r9 + 4], ecx
+
+        ; mov ecx, [v_coords + eax + 8]
+        ; mov [third_array + r9 + 8], ecx
+
+        ; inc rbx
+        ; cmp rbx, 3
+        ; jne .again
+        ; mov rbx, 0
+
+        ; call to_screen
+
+
+        
+
 section .bss
     hwnd        resq    1
     wnd_class   resb    80
