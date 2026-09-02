@@ -32,6 +32,7 @@ extern DeleteDC
 extern BitBlt
 extern PatBlt
 extern AdjustWindowRectEx
+extern CreateDIBSection
 
 ; 658x520 = 640x480 bcs of window borders and title bar
 
@@ -44,8 +45,8 @@ section .data
         ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
         dd 256
         dq 0
-    pixel_x                 dq 0
-    pixel_y                 dq 5
+    pixel_x                 dq 320
+    pixel_y                 dq 320
     wnd_length              dd 0
     wnd_width               dd 0
     keys_on                 db 0
@@ -81,7 +82,18 @@ section .data
         dd  4, 3, 7
         dd  4, 7, 8
 
-
+    bitmap_info:
+        dd 40              ; biSize
+        dd 620             ; biWidth
+        dd -620           ; biHeight   <-- negative = top-down bitmap, makes y=0 the top and y=max the bottom
+        dw 1               ; biPlanes
+        dw 32              ; biBitCount
+        dd 0               ; biCompression = BI_RGB
+        dd 0               ; biSizeImage
+        dd 0               ; biXPelsPerMeter
+        dd 0               ; biYPelsPerMeter
+        dd 0               ; biClrUsed
+        dd 0               ; biClrImportant
 
 section .bss
     hwnd        resq    1
@@ -92,6 +104,7 @@ section .bss
     backbuffer_dc      resq 1
     backbuffer_bitmap  resq 1
     old_bitmap         resq 1
+    backbuffer_pixels  resq 1
     ; I doubt the points will go to 16 million, i could always change it but this 3d engine doesnt need so, it would be more fun to try to work with only 32 bits as well
     third_array        resd 9
     triangle           resd 6
@@ -175,12 +188,19 @@ main:
     call CreateCompatibleDC
     mov [backbuffer_dc], rax
 
-    mov rcx, r15
-    mov edx, [wnd_length]
-    mov r8d, [wnd_width]
-    call CreateCompatibleBitmap
+    mov rcx, r15                    ; HDC
+    lea rdx, [bitmap_info]          ; BITMAPINFO*
+    xor r8d, r8d                    ; DIB_RGB_COLORS = 0
+    lea r9, [backbuffer_pixels]     ; receives pixel memory pointer
+
+    mov qword [rsp + 32], 0         ; hSection = NULL
+    mov qword [rsp + 40], 0         ; offset = 0
+
+    call CreateDIBSection
+
     mov [backbuffer_bitmap], rax
 
+    ; Select bitmap into our backbuffer DC
     mov rcx, [backbuffer_dc]
     mov rdx, [backbuffer_bitmap]
     call SelectObject
@@ -269,19 +289,19 @@ default_processing:
     ret
 
 handle_mouse:
-    ; mov rcx, r9
-    ; mov edx, 0x10000003
-    ; lea r8, [input_buffer]
-    ; lea r9, [input_buffer_size]
-    ; mov dword [rsp+32], 24
-    ; call GetRawInputData
+    mov rcx, r9
+    mov edx, 0x10000003
+    lea r8, [input_buffer]
+    lea r9, [input_buffer_size]
+    mov dword [rsp+32], 24
+    call GetRawInputData
 
-    ; movsxd rax, dword [input_buffer + 36]
-    ; add [pixel_x], rax
-    ; movsxd rax, dword [input_buffer + 40]
-    ; add [pixel_y], rax
+    movsxd rax, dword [input_buffer + 36]
+    add [pixel_x], rax
+    movsxd rax, dword [input_buffer + 40]
+    add [pixel_y], rax
 
-    ; xor rax, rax
+    xor rax, rax
     leave 
     ret
 
@@ -323,79 +343,79 @@ handle_paint:
         mov dword [rsp + 32], eax
         mov dword [rsp + 40], 0x00000042       ; BLACKNESS
         call PatBlt
-    ; above clears the screen wit a black rect using the pattern block transfer function
+    ; ; above clears the screen wit a black rect using the pattern block transfer function
 
-    mov rsi, 0
-    mov rbx, 0
-    .again:
-        mov r8, rsi 
-        imul r8, 12
+    ; mov rsi, 0
+    ; mov rbx, 0
+    ; .again:
+    ;     mov r8, rsi 
+    ;     imul r8, 12
 
-        ; you dont need the rel keyword here but it shows that u get the absolute, and that ur not able to do memory location + register as theres no encoding system for that
-        lea r10, [rel v_coords]
-        lea r11, [rel f_coords]
-        add r11, r8
+    ;     ; you dont need the rel keyword here but it shows that u get the absolute, and that ur not able to do memory location + register as theres no encoding system for that
+    ;     lea r10, [rel v_coords]
+    ;     lea r11, [rel f_coords]
+    ;     add r11, r8
 
-        mov eax, [r11 + rbx*4]
-        dec eax
-        imul eax, 12
-        mov ecx, [r10 + rax]
-        mov r9, rbx
-        imul r9, 12
+    ;     mov eax, [r11 + rbx*4]
+    ;     dec eax
+    ;     imul eax, 12
+    ;     mov ecx, [r10 + rax]
+    ;     mov r9, rbx
+    ;     imul r9, 12
 
-        lea r8, [rel third_array]
-        add r9, r8
-        mov dword [r9], ecx
+    ;     lea r8, [rel third_array]
+    ;     add r9, r8
+    ;     mov dword [r9], ecx
 
-        mov ecx, [r10 + rax + 4]
-        mov dword [r9 + 4], ecx
+    ;     mov ecx, [r10 + rax + 4]
+    ;     mov dword [r9 + 4], ecx
 
-        mov ecx, [r10 + rax + 8]
-        mov dword [r9 + 8], ecx
+    ;     mov ecx, [r10 + rax + 8]
+    ;     mov dword [r9 + 8], ecx
 
-        inc rbx
-        cmp rbx, 3
-        jne .again
-        mov rbx, 0
+    ;     inc rbx
+    ;     cmp rbx, 3
+    ;     jne .again
+    ;     mov rbx, 0
 
-        call to_screen
+    ;     call to_screen
 
  
-        ; we have to sign extend because the drawline function uses 64 bit registers, meaning the sign bit is allll the way far out, and putting 32 bits inside of 64 bits will make the register think it has a huge number, bcs of 2's complement
-        ; since we are sign extending, it is ambigious, so you must specify now
-        movsxd rax, dword [backbuffer_dc]
-        movsxd rcx, dword [triangle]
-        movsxd rdx, dword [triangle+4]
-        movsxd r8, dword [triangle+8]
-        movsxd r9, dword [triangle+12]
-        call draw_line
+    ;     ; we have to sign extend because the drawline function uses 64 bit registers, meaning the sign bit is allll the way far out, and putting 32 bits inside of 64 bits will make the register think it has a huge number, bcs of 2's complement
+    ;     ; since we are sign extending, it is ambigious, so you must specify now
+    ;     movsxd rax, dword [backbuffer_dc]
+    ;     movsxd rcx, dword [triangle]
+    ;     movsxd rdx, dword [triangle+4]
+    ;     movsxd r8, dword [triangle+8]
+    ;     movsxd r9, dword [triangle+12]
+    ;     call draw_line
 
-        movsxd rax, dword [backbuffer_dc]
-        movsxd rcx, dword [triangle+8]
-        movsxd rdx, dword [triangle+12]
-        movsxd r8, dword [triangle+16]
-        movsxd r9, dword [triangle+20]
-        call draw_line
+    ;     movsxd rax, dword [backbuffer_dc]
+    ;     movsxd rcx, dword [triangle+8]
+    ;     movsxd rdx, dword [triangle+12]
+    ;     movsxd r8, dword [triangle+16]
+    ;     movsxd r9, dword [triangle+20]
+    ;     call draw_line
 
-        movsxd rax, dword [backbuffer_dc]
-        movsxd rcx, dword [triangle]
-        movsxd rdx, dword [triangle+4]
-        movsxd r8, dword [triangle+16]
-        movsxd r9, dword [triangle+20]
-        call draw_line
+    ;     movsxd rax, dword [backbuffer_dc]
+    ;     movsxd rcx, dword [triangle]
+    ;     movsxd rdx, dword [triangle+4]
+    ;     movsxd r8, dword [triangle+16]
+    ;     movsxd r9, dword [triangle+20]
+    ;     call draw_line
 
         
-        ; mov rax, [backbuffer_dc]
-        ; mov rcx, 10
-        ; mov rdx, 10
-        ; mov r8, 10
-        ; mov r9, 620
-        ; call draw_line
+        mov rax, [backbuffer_dc]
+        mov rcx, 310
+        mov rdx, 310
+        mov r8, [pixel_x]
+        mov r9, [pixel_y]
+        call draw_line
         
-        inc rsi
-        cmp rsi, 12
-        jne .again
-        mov rsi, 0
+        ; inc rsi
+        ; cmp rsi, 12
+        ; jne .again
+        ; mov rsi, 0
 
 
 
@@ -689,8 +709,8 @@ new_thread:
     sub rsp, 40
     .loop:
         ; Including this skip will stop rendering for the mouse movement, will still change the bitmap in the back tho
-        cmp byte [keys_on], 0
-        je .skip
+        ; cmp byte [keys_on], 0
+        ; je .skip
 
     ; w key
         test byte [keys_on], 00000001b
@@ -771,6 +791,15 @@ draw_line:
         mov r12, rbx
         mov r14, r8
 
+        cmp r9, 0
+        jl .done
+        cmp rdx, 0
+        jl .done
+        cmp r9, 620
+        jg .done
+        cmp rdx, 620
+        jg .done
+
         sub r12, r14
         js .continue
 
@@ -813,13 +842,13 @@ draw_line:
         mov rcx, r13
         mov rdx, rbx
         mov r8, rdi
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
         mov rcx, r13
         mov rdx, rsi
         mov r8, r15
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
     ; if slope is negative, change if we decrement or increment
@@ -846,13 +875,13 @@ draw_line:
         mov rcx, r13
         mov rdx, rbx
         mov r8, rdi
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
         mov rcx, r13
         mov rdx, rsi
         mov r8, r15
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
         xchg rbx, rdi
@@ -889,20 +918,29 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
-        inc r8
-        mov r9d, r15d
-        call SetPixel
+        ; rdi = y, rbx = x
+        ; equation is ((y+1) * 640)*4 + x*4
+        mov rax, rdi
+        inc rax
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
+        mov rax, rdi
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
+
 
         jmp .again_x
 
@@ -925,20 +963,26 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
-        dec r8
-        mov r9d, r15d
-        call SetPixel
+        mov rax, rdi
+        dec rax
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
+        mov rax, rdi
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
         jmp .again_x_down
 
@@ -961,20 +1005,26 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rdi
-        inc rdx
-        mov r8, rbx
-        mov r9d, r15d
-        call SetPixel
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        inc rax
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rdi
-        mov r8, rbx
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
         jmp .again_y
 
@@ -983,6 +1033,7 @@ draw_line:
 
         cmp rbx, rsi
         je .done
+
 
         add r14, r12
 
@@ -996,20 +1047,26 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rdi
-        inc rdx
-        mov r8, rbx
-        mov r9d, r15d
-        call SetPixel
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        inc rax
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rdi
-        mov r8, rbx
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
         jmp .again_y_down
 
