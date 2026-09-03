@@ -45,8 +45,8 @@ section .data
         ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
         dd 256
         dq 0
-    pixel_x                 dq 320
-    pixel_y                 dq 320
+    pixel_x                 dq 0
+    pixel_y                 dq 0
     wnd_length              dd 0
     wnd_width               dd 0
     keys_on                 db 0
@@ -289,17 +289,17 @@ default_processing:
     ret
 
 handle_mouse:
-    mov rcx, r9
-    mov edx, 0x10000003
-    lea r8, [input_buffer]
-    lea r9, [input_buffer_size]
-    mov dword [rsp+32], 24
-    call GetRawInputData
+    ; mov rcx, r9
+    ; mov edx, 0x10000003
+    ; lea r8, [input_buffer]
+    ; lea r9, [input_buffer_size]
+    ; mov dword [rsp+32], 24
+    ; call GetRawInputData
 
-    movsxd rax, dword [input_buffer + 36]
-    add [pixel_x], rax
-    movsxd rax, dword [input_buffer + 40]
-    add [pixel_y], rax
+    ; movsxd rax, dword [input_buffer + 36]
+    ; add [pixel_x], rax
+    ; movsxd rax, dword [input_buffer + 40]
+    ; add [pixel_y], rax
 
     xor rax, rax
     leave 
@@ -343,79 +343,79 @@ handle_paint:
         mov dword [rsp + 32], eax
         mov dword [rsp + 40], 0x00000042       ; BLACKNESS
         call PatBlt
-    ; ; above clears the screen wit a black rect using the pattern block transfer function
+    ; above clears the screen wit a black rect using the pattern block transfer function
 
-    ; mov rsi, 0
-    ; mov rbx, 0
-    ; .again:
-    ;     mov r8, rsi 
-    ;     imul r8, 12
+    mov rsi, 0
+    mov rbx, 0
+    .again:
+        mov r8, rsi 
+        imul r8, 12
 
-    ;     ; you dont need the rel keyword here but it shows that u get the absolute, and that ur not able to do memory location + register as theres no encoding system for that
-    ;     lea r10, [rel v_coords]
-    ;     lea r11, [rel f_coords]
-    ;     add r11, r8
+        ; you dont need the rel keyword here but it shows that u get the absolute, and that ur not able to do memory location + register as theres no encoding system for that
+        lea r10, [rel v_coords]
+        lea r11, [rel f_coords]
+        add r11, r8
 
-    ;     mov eax, [r11 + rbx*4]
-    ;     dec eax
-    ;     imul eax, 12
-    ;     mov ecx, [r10 + rax]
-    ;     mov r9, rbx
-    ;     imul r9, 12
+        mov eax, [r11 + rbx*4]
+        dec eax
+        imul eax, 12
+        mov ecx, [r10 + rax]
+        mov r9, rbx
+        imul r9, 12
 
-    ;     lea r8, [rel third_array]
-    ;     add r9, r8
-    ;     mov dword [r9], ecx
+        lea r8, [rel third_array]
+        add r9, r8
+        mov dword [r9], ecx
 
-    ;     mov ecx, [r10 + rax + 4]
-    ;     mov dword [r9 + 4], ecx
+        mov ecx, [r10 + rax + 4]
+        mov dword [r9 + 4], ecx
 
-    ;     mov ecx, [r10 + rax + 8]
-    ;     mov dword [r9 + 8], ecx
+        mov ecx, [r10 + rax + 8]
+        mov dword [r9 + 8], ecx
 
-    ;     inc rbx
-    ;     cmp rbx, 3
-    ;     jne .again
-    ;     mov rbx, 0
+        inc rbx
+        cmp rbx, 3
+        jne .again
+        mov rbx, 0
 
-    ;     call to_screen
+        call to_screen
 
  
-    ;     ; we have to sign extend because the drawline function uses 64 bit registers, meaning the sign bit is allll the way far out, and putting 32 bits inside of 64 bits will make the register think it has a huge number, bcs of 2's complement
-    ;     ; since we are sign extending, it is ambigious, so you must specify now
-    ;     movsxd rax, dword [backbuffer_dc]
-    ;     movsxd rcx, dword [triangle]
-    ;     movsxd rdx, dword [triangle+4]
-    ;     movsxd r8, dword [triangle+8]
-    ;     movsxd r9, dword [triangle+12]
-    ;     call draw_line
-
-    ;     movsxd rax, dword [backbuffer_dc]
-    ;     movsxd rcx, dword [triangle+8]
-    ;     movsxd rdx, dword [triangle+12]
-    ;     movsxd r8, dword [triangle+16]
-    ;     movsxd r9, dword [triangle+20]
-    ;     call draw_line
-
-    ;     movsxd rax, dword [backbuffer_dc]
-    ;     movsxd rcx, dword [triangle]
-    ;     movsxd rdx, dword [triangle+4]
-    ;     movsxd r8, dword [triangle+16]
-    ;     movsxd r9, dword [triangle+20]
-    ;     call draw_line
-
-        
-        mov rax, [backbuffer_dc]
-        mov rcx, 310
-        mov rdx, 310
-        mov r8, [pixel_x]
-        mov r9, [pixel_y]
+        ; we have to sign extend because the drawline function uses 64 bit registers, meaning the sign bit is allll the way far out, and putting 32 bits inside of 64 bits will make the register think it has a huge number, bcs of 2's complement
+        ; since we are sign extending, it is ambigious, so you must specify now
+        movsxd rax, dword [backbuffer_dc]
+        movsxd rcx, dword [triangle]
+        movsxd rdx, dword [triangle+4]
+        movsxd r8, dword [triangle+8]
+        movsxd r9, dword [triangle+12]
         call draw_line
+
+        movsxd rax, dword [backbuffer_dc]
+        movsxd rcx, dword [triangle+8]
+        movsxd rdx, dword [triangle+12]
+        movsxd r8, dword [triangle+16]
+        movsxd r9, dword [triangle+20]
+        call draw_line
+
+        movsxd rax, dword [backbuffer_dc]
+        movsxd rcx, dword [triangle]
+        movsxd rdx, dword [triangle+4]
+        movsxd r8, dword [triangle+16]
+        movsxd r9, dword [triangle+20]
+        call draw_line
+
         
-        ; inc rsi
-        ; cmp rsi, 12
-        ; jne .again
-        ; mov rsi, 0
+        ; mov rax, [backbuffer_dc]
+        ; mov rcx, 310
+        ; mov rdx, 310
+        ; mov r8, [pixel_x]
+        ; mov r9, [pixel_y]
+        ; call draw_line
+        
+        inc rsi
+        cmp rsi, 12
+        jne .again
+        mov rsi, 0
 
 
 
@@ -750,6 +750,16 @@ new_thread:
         xor rax, rax
         jmp .loop
 
+; rcx = angle
+; rdx = y
+; r8 = z
+; x: x
+; y: y * cos(a) - z * sin(a)
+; z: y * sin(a) + z * cos(a)
+rotatex:
+    mov rcx, 
+
+    ret
 
 
 
@@ -805,6 +815,7 @@ draw_line:
 
         xchg rbx, rsi
         xchg rcx, r8
+
         xchg rdi, r15
         xchg r9, rdx
         
