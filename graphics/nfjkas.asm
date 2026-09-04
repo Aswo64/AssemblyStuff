@@ -309,17 +309,21 @@ handle_mouse:
     mulss xmm0, [half]
     mulss xmm0, [half]
     mulss xmm0, [half]
-    movss xmm1, [rotX]
-    addss xmm1, xmm0
-    movss [rotX], xmm1
-    movsxd rax, dword [input_buffer + 40]
-    cvtsi2ss xmm0, rax
-    mulss xmm0, [half]
     mulss xmm0, [half]
     mulss xmm0, [half]
     movss xmm1, [rotY]
     addss xmm1, xmm0
     movss [rotY], xmm1
+    movsxd rax, dword [input_buffer + 40]
+    cvtsi2ss xmm0, rax
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    movss xmm1, [rotX]
+    addss xmm1, xmm0
+    movss [rotX], xmm1
 
     xor rax, rax
     leave 
