@@ -33,6 +33,8 @@ extern BitBlt
 extern PatBlt
 extern AdjustWindowRectEx
 extern CreateDIBSection
+extern sinf
+extern cosf
 
 ; 658x520 = 640x480 bcs of window borders and title bar
 
@@ -47,6 +49,12 @@ section .data
         dq 0
     pixel_x                 dq 0
     pixel_y                 dq 0
+    rotX                    dd 0.0
+    rotY                    dd 0.0
+    sin_X                   dd 0.0
+    cos_X                   dd 0.0
+    sin_Y                   dd 0.0
+    cos_Y                   dd 0.0
     wnd_length              dd 0
     wnd_width               dd 0
     keys_on                 db 0
@@ -289,17 +297,29 @@ default_processing:
     ret
 
 handle_mouse:
-    ; mov rcx, r9
-    ; mov edx, 0x10000003
-    ; lea r8, [input_buffer]
-    ; lea r9, [input_buffer_size]
-    ; mov dword [rsp+32], 24
-    ; call GetRawInputData
+    mov rcx, r9
+    mov edx, 0x10000003
+    lea r8, [input_buffer]
+    lea r9, [input_buffer_size]
+    mov dword [rsp+32], 24
+    call GetRawInputData
 
-    ; movsxd rax, dword [input_buffer + 36]
-    ; add [pixel_x], rax
-    ; movsxd rax, dword [input_buffer + 40]
-    ; add [pixel_y], rax
+    movsxd rax, dword [input_buffer + 36]
+    cvtsi2ss xmm0, rax
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    movss xmm1, [rotX]
+    addss xmm1, xmm0
+    movss [rotX], xmm1
+    movsxd rax, dword [input_buffer + 40]
+    cvtsi2ss xmm0, rax
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    movss xmm1, [rotY]
+    addss xmm1, xmm0
+    movss [rotY], xmm1
 
     xor rax, rax
     leave 
@@ -347,6 +367,19 @@ handle_paint:
 
     mov rsi, 0
     mov rbx, 0
+    movss xmm0, [rotX]
+    call sinf
+    movss [sin_X], xmm0
+    movss xmm0, [rotX]
+    call cosf
+    movss [cos_X], xmm0
+    movss xmm0, [rotY]
+    call sinf
+    movss [sin_Y], xmm0
+    movss xmm0, [rotY]
+    call cosf
+    movss [cos_Y], xmm0
+
     .again:
         mov r8, rsi 
         imul r8, 12
@@ -455,20 +488,28 @@ handle_paint:
 ; This function could use MAJOR optimizations, often i calculate the same point to make different triangle, perhaps i could later use a cache that could grab the point that has alreayd been calculated
 to_screen:
     ; x
-    mov eax, [pixel_x]
-    cvtsi2ss xmm3, eax
     movss xmm0, [third_array]
-    addss xmm0, xmm3
     ; y
     movss xmm1, [third_array + 4]
     ; z
+    movss xmm2, [third_array + 8]
+
+
+    mov eax, [pixel_x]
+    cvtsi2ss xmm3, eax
+    addss xmm0, xmm3
+
     mov eax, [pixel_y]
     cvtsi2ss xmm3, eax
-    movss xmm2, [third_array + 8]
     addss xmm2, xmm3
+
+    call rotatex
+    call rotatey
+    
     ucomiss xmm2, [z_plane]
     jb .done
 
+    
 
     ; x / z
     divss xmm0, xmm2
@@ -511,18 +552,25 @@ to_screen:
 
 
 
-    mov eax, [pixel_x]
-    cvtsi2ss xmm3, eax
-    movss xmm0, [third_array + 12]
-    addss xmm0, xmm3
+    ; x
+    movss xmm0, [third_array+ 12]
     ; y
     movss xmm1, [third_array + 16]
     ; z
+    movss xmm2, [third_array + 20]
+
+
+    mov eax, [pixel_x]
+    cvtsi2ss xmm3, eax
+    addss xmm0, xmm3
+
     mov eax, [pixel_y]
     cvtsi2ss xmm3, eax
-    movss xmm2, [third_array + 20]
     addss xmm2, xmm3
 
+    call rotatex
+    call rotatey
+    
     ucomiss xmm2, [z_plane]
     jb .done
 
@@ -567,20 +615,24 @@ to_screen:
 
 
 
-    mov eax, [pixel_x]
-    cvtsi2ss xmm3, eax
-    movss xmm0, [third_array + 24]
-    addss xmm0, xmm3
+   ; x
+    movss xmm0, [third_array+ 24]
     ; y
     movss xmm1, [third_array + 28]
     ; z
+    movss xmm2, [third_array + 32]
+
+
+    mov eax, [pixel_x]
+    cvtsi2ss xmm3, eax
+    addss xmm0, xmm3
+
     mov eax, [pixel_y]
     cvtsi2ss xmm3, eax
-    movss xmm2, [third_array + 32]
     addss xmm2, xmm3
 
-    ucomiss xmm2, [z_plane]
-    jb .done
+    call rotatex
+    call rotatey
 
 
     ; y / z
@@ -750,14 +802,56 @@ new_thread:
         xor rax, rax
         jmp .loop
 
-; rcx = angle
-; rdx = y
-; r8 = z
+
+; xmm0 = x
+; xmm1 = y
+; xmm2 = z
 ; x: x
-; y: y * cos(a) - z * sin(a)
-; z: y * sin(a) + z * cos(a)
+; y' = y * cos(a) - z * sin(a)
+; z' = y * sin(a) + z * cos(a)
 rotatex:
-    mov rcx, 
+    movss xmm4, xmm1
+    mulss xmm4, [cos_X]
+    movss xmm3, xmm2
+    mulss xmm3, [sin_X]
+    subss xmm4, xmm3
+    ; xmm4 has y'
+
+    movss xmm3, xmm1
+    mulss xmm3, [sin_X]
+    movss xmm5, xmm2
+    mulss xmm5, [cos_X]
+    addss xmm3, xmm5
+    ; xmm5 has z'
+
+
+    movss xmm1, xmm4
+    movss xmm2, xmm3
+
+    ret
+
+; xmm0 = x
+; xmm1 = y
+; xmm2 = z
+; x' = x * cos(a) - z * sin(a)
+; z' = x * sin(a) + z * cos(a)
+rotatey:
+    movss xmm4, xmm0
+    mulss xmm4, [cos_Y]
+    movss xmm3, xmm2
+    mulss xmm3, [sin_Y]
+    subss xmm4, xmm3
+    ; xmm4 has x'
+
+    movss xmm3, xmm0
+    mulss xmm3, [sin_Y]
+    movss xmm5, xmm2
+    mulss xmm5, [cos_Y]
+    addss xmm3, xmm5
+    ; xmm5 has z'
+
+    movss xmm0, xmm4
+    movss xmm2, xmm3
 
     ret
 
