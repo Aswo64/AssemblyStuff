@@ -47,8 +47,8 @@ section .data
         ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
         dd 256
         dq 0
-    pixel_x                 dq 0
-    pixel_y                 dq 0
+    pixel_x                 dd 0.0
+    pixel_y                 dd 0.0
     rotX                    dd 0.0
     rotY                    dd 0.0
     sin_X                   dd 0.0
@@ -58,6 +58,7 @@ section .data
     wnd_length              dd 0
     wnd_width               dd 0
     keys_on                 db 0
+    points_valid            db 0
     one                     dd 1.0
     half                    dd 0.5
     z_plane                 dd 0.01
@@ -311,9 +312,11 @@ handle_mouse:
     mulss xmm0, [half]
     mulss xmm0, [half]
     mulss xmm0, [half]
-    movss xmm1, [rotY]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    movss xmm1, [rotX]
     addss xmm1, xmm0
-    movss [rotY], xmm1
+    movss [rotX], xmm1
     movsxd rax, dword [input_buffer + 40]
     cvtsi2ss xmm0, rax
     mulss xmm0, [half]
@@ -321,9 +324,11 @@ handle_mouse:
     mulss xmm0, [half]
     mulss xmm0, [half]
     mulss xmm0, [half]
-    movss xmm1, [rotX]
-    addss xmm1, xmm0
-    movss [rotX], xmm1
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    movss xmm1, [rotY]
+    subss xmm1, xmm0
+    movss [rotY], xmm1
 
     xor rax, rax
     leave 
@@ -331,8 +336,6 @@ handle_mouse:
 
 
 handle_timer:
-    inc qword [pixel_x]
-    inc qword [pixel_y]
 
     mov rcx, [hwnd]
     xor rdx, rdx
@@ -373,16 +376,16 @@ handle_paint:
     mov rbx, 0
     movss xmm0, [rotX]
     call sinf
-    movss [sin_X], xmm0
+    movss [sin_Y], xmm0
     movss xmm0, [rotX]
     call cosf
-    movss [cos_X], xmm0
+    movss [cos_Y], xmm0
     movss xmm0, [rotY]
     call sinf
-    movss [sin_Y], xmm0
+    movss [sin_X], xmm0
     movss xmm0, [rotY]
     call cosf
-    movss [cos_Y], xmm0
+    movss [cos_X], xmm0
 
     .again:
         mov r8, rsi 
@@ -445,8 +448,8 @@ handle_paint:
         ; mov rax, [backbuffer_dc]
         ; mov rcx, 310
         ; mov rdx, 310
-        ; mov r8, [pixel_x]
-        ; mov r9, [pixel_y]
+        ; cvtss2si r8, [rotX]
+        ; cvtss2si r9, [rotY]
         ; call draw_line
         
         inc rsi
@@ -499,19 +502,25 @@ to_screen:
     movss xmm2, [third_array + 8]
 
 
-    mov eax, [pixel_x]
-    cvtsi2ss xmm3, eax
+    movss xmm3, [pixel_x]
     addss xmm0, xmm3
 
-    mov eax, [pixel_y]
-    cvtsi2ss xmm3, eax
+
+    movss xmm3, [pixel_y]
     addss xmm2, xmm3
 
-    call rotatex
+    ; rotating x axis must be done first to make it natural, why? idk search it up
     call rotatey
+    call rotatex
     
     ucomiss xmm2, [z_plane]
-    jb .done
+    ja .continue
+
+    ; other point's z coord
+    mov xmm3, [third_array + 20]
+    
+
+    .continue:
 
     
 
@@ -520,7 +529,7 @@ to_screen:
     ; y / z
     divss xmm1, xmm2
     
-
+    ; fitting to viewport
     addss xmm0, [one]
     mulss xmm0, [half]
 
@@ -539,14 +548,7 @@ to_screen:
     cvtss2si eax, xmm0
     cvtss2si ecx, xmm1
 
-    cmp eax, 0
-    jl .done
-    cmp eax, [wnd_length]
-    jg .done
-    cmp ecx, 0
-    jl .done
-    cmp ecx, [wnd_width]
-    jg .done
+    
 
 
     mov dword [triangle], eax
@@ -564,16 +566,14 @@ to_screen:
     movss xmm2, [third_array + 20]
 
 
-    mov eax, [pixel_x]
-    cvtsi2ss xmm3, eax
+    movss xmm3, [pixel_x]
     addss xmm0, xmm3
 
-    mov eax, [pixel_y]
-    cvtsi2ss xmm3, eax
+    movss xmm3, [pixel_y]
     addss xmm2, xmm3
 
-    call rotatex
     call rotatey
+    call rotatex
     
     ucomiss xmm2, [z_plane]
     jb .done
@@ -602,14 +602,6 @@ to_screen:
     cvtss2si eax, xmm0
     cvtss2si ecx, xmm1
 
-    cmp eax, 0
-    jl .done
-    cmp eax, [wnd_length]
-    jg .done
-    cmp ecx, 0
-    jl .done
-    cmp ecx, [wnd_width]
-    jg .done
 
     mov dword [triangle + 8], eax
     mov dword [triangle + 12], ecx
@@ -627,16 +619,17 @@ to_screen:
     movss xmm2, [third_array + 32]
 
 
-    mov eax, [pixel_x]
-    cvtsi2ss xmm3, eax
+    movss xmm3, [pixel_x]
     addss xmm0, xmm3
 
-    mov eax, [pixel_y]
-    cvtsi2ss xmm3, eax
+    movss xmm3, [pixel_y]
     addss xmm2, xmm3
 
-    call rotatex
     call rotatey
+    call rotatex
+
+    ucomiss xmm2, [z_plane]
+    jb .done
 
 
     ; y / z
@@ -661,15 +654,6 @@ to_screen:
 
     cvtss2si eax, xmm0
     cvtss2si ecx, xmm1
-
-    cmp eax, 0
-    jl .done
-    cmp eax, [wnd_length]
-    jg .done
-    cmp ecx, 0
-    jl .done
-    cmp ecx, [wnd_width]
-    jg .done
 
     mov dword [triangle + 16], eax
     mov dword [triangle + 20], ecx
@@ -771,22 +755,62 @@ new_thread:
     ; w key
         test byte [keys_on], 00000001b
         jz .forward
-        dec qword [pixel_y]
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        subss xmm1, xmm0 
+        movss [pixel_y], xmm1
+
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        subss xmm1, xmm0 
+        movss [pixel_x], xmm1
     .forward:
     ; s key
         test byte [keys_on], 00000010b
         jz .back
-        inc qword [pixel_y]
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        addss xmm1, xmm0 
+        movss [pixel_y], xmm1
+
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        addss xmm1, xmm0 
+        movss [pixel_x], xmm1
     .back:
     ; left key
         test byte [keys_on], 00000100b
         jz .left
-        inc qword [pixel_x]
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        subss xmm1, xmm0 
+        movss [pixel_y], xmm1
+
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        addss xmm1, xmm0 
+        movss [pixel_x], xmm1
     .left:
     ; right key
         test byte [keys_on], 00001000b
         jz .continue
-        dec qword [pixel_x]
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        addss xmm1, xmm0 
+        movss [pixel_y], xmm1
+
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        subss xmm1, xmm0 
+        movss [pixel_x], xmm1
 
 
 
@@ -903,10 +927,18 @@ draw_line:
         jl .done
         cmp rdx, 0
         jl .done
+        ; cmp r8, 0
+        ; jl .done
+        ; cmp rcx, 0
+        ; jl .done
         cmp r9, 620
         jg .done
         cmp rdx, 620
         jg .done
+        ; cmp r8, 620
+        ; jg .done
+        ; cmp rcx, 620
+        ; jg .done
 
         sub r12, r14
         js .continue
