@@ -25,6 +25,18 @@ extern GetStockObject
 extern FillRect
 extern GetRawInputData
 extern RegisterRawInputDevices
+extern CreateCompatibleDC
+extern CreateCompatibleBitmap
+extern SelectObject
+extern DeleteDC
+extern BitBlt
+extern PatBlt
+extern AdjustWindowRectEx
+extern CreateDIBSection
+extern sinf
+extern cosf
+
+; 658x520 = 640x480 bcs of window borders and title bar
 
 section .data
     window_class_name db "MyWin64Class", 0
@@ -32,19 +44,38 @@ section .data
     mouse_raw_input_device:
         dw 1
         dw 2
+        ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
         dd 256
         dq 0
-    pixel_x         dq 20
-    pixel_y         dq 20
+    pixel_x                 dd 0.0
+    pixel_y                 dd 0.0
+    rotX                    dd 0.0
+    rotY                    dd 0.0
+    sin_X                   dd 0.0
+    cos_X                   dd 0.0
+    sin_Y                   dd 0.0
+    cos_Y                   dd 0.0
+    wnd_length              dd 0
+    wnd_width               dd 0
+    keys_on                 db 0
+    points_valid            db 0
+    one                     dd 1.0
+    half                    dd 0.5
+    z_plane                 dd 0.01
+    window_size:
+        dd 0
+        dd 0
+        dd 620
+        dd 620
     v_coords:
-        dd 0.25, 0.25, -0.25
-        dd -0.25, 0.25, -0.25
-        dd -0.25, -0.25, -0.25
-        dd 0.25, -0.25, -0.25
-        dd 0.25, 0.25, 0.25
-        dd -0.25, 0.25, 0.25
-        dd -0.25, -0.25, 0.25
-        dd 0.25, -0.25, 0.25
+        dd 3.25, 3.25, -3.25
+        dd -3.25, 3.25, -3.25
+        dd -3.25, -3.25, -3.25
+        dd 3.25, -3.25, -3.25
+        dd 3.25, 3.25, 3.25
+        dd -3.25, 3.25, 3.25
+        dd -3.25, -3.25, 3.25
+        dd 3.25, -3.25, 3.25
     
     f_coords:
         dd  1, 2, 3
@@ -60,33 +91,18 @@ section .data
         dd  4, 3, 7
         dd  4, 7, 8
 
-
-
-        ; mov r8, rsi 
-        ; imul r8, 12
-        ; mov eax, [f_coords + r8 + rbx*4]
-        ; dec eax
-        ; imul eax, 12
-        ; mov ecx, [v_coords + eax]
-        ; mov r9, rbx
-        ; imul r9, 12
-        ; mov [third_array + r9], ecx
-
-        ; mov ecx, [v_coords + eax + 4]
-        ; mov [third_array + r9 + 4], ecx
-
-        ; mov ecx, [v_coords + eax + 8]
-        ; mov [third_array + r9 + 8], ecx
-
-        ; inc rbx
-        ; cmp rbx, 3
-        ; jne .again
-        ; mov rbx, 0
-
-        ; call to_screen
-
-
-        
+    bitmap_info:
+        dd 40              ; biSize
+        dd 620             ; biWidth
+        dd -620           ; biHeight   <-- negative = top-down bitmap, makes y=0 the top and y=max the bottom
+        dw 1               ; biPlanes
+        dw 32              ; biBitCount
+        dd 0               ; biCompression = BI_RGB
+        dd 0               ; biSizeImage
+        dd 0               ; biXPelsPerMeter
+        dd 0               ; biYPelsPerMeter
+        dd 0               ; biClrUsed
+        dd 0               ; biClrImportant
 
 section .bss
     hwnd        resq    1
@@ -94,6 +110,14 @@ section .bss
     msg         resb    48
     input_buffer resb 64
     input_buffer_size resd 64
+    backbuffer_dc      resq 1
+    backbuffer_bitmap  resq 1
+    old_bitmap         resq 1
+    backbuffer_pixels  resq 1
+    ; I doubt the points will go to 16 million, i could always change it but this 3d engine doesnt need so, it would be more fun to try to work with only 32 bits as well
+    third_array        resd 6
+    triangle           resd 4
+    
 
 section .text
 global main
@@ -102,11 +126,29 @@ main:
     mov rbp, rsp
     sub rsp, 96
 
+    ; Uses a windows API to change the window size to make the client area what i actually want, the borders and titles mess it up so this fixes it, however if i want to change to fullscreen, i have to change it
+    ; bcs then the values given will acc be the client area
+    lea rcx, [window_size]
+    mov edx, 0x10CF0000
+    xor r8d, r8d
+    xor r9d, r9d
+    call AdjustWindowRectEx
+
+    ; Actually calculating and putting the values in memory 
+    mov eax, [window_size + 8]
+    sub eax, [window_size + 0]
+    mov [wnd_length], eax
+
+    mov edx, [window_size + 12]
+    sub edx, [window_size + 4]
+    mov [wnd_width], edx
+
     mov rdi, wnd_class
     xor rax, rax
     mov rcx, 10
     rep stosq
 
+    ; Setting up the window class
     mov dword [wnd_class], 80
     mov dword [wnd_class + 4], 3
     
@@ -116,7 +158,7 @@ main:
     lea rax, [window_class_name]
     mov qword [wnd_class + 64], rax
 
-    ; This feeds the 
+    ; This gives the class a black brush
     mov ecx, 4
     call GetStockObject
     mov [wnd_class+48], rax
@@ -130,24 +172,60 @@ main:
     mov r9d, 0x10CF0000
     
 
-    mov dword [rsp + 32], 600
+    mov dword [rsp + 32], 640
     mov dword [rsp + 40], 350
-    mov dword [rsp + 48], 640
-    mov dword [rsp + 56], 480
+    mov eax, [wnd_length]
+    mov dword [rsp + 48], eax
+    mov eax, [wnd_width]
+    mov dword [rsp + 56], eax
     mov qword [rsp + 64], 0
     mov qword [rsp + 72], 0
     mov qword [rsp + 80], 0
     mov qword [rsp + 88], 0
     call CreateWindowExA
-
     mov [hwnd], rax
-    mov rcx, rax
-    mov rdx, 5
+    
+    
+    ; Making a new DC and bitmap to draw on, for later drawing, here we make a DC, which is like a header for a bitmap, the new DC refers to the already existing Window DC
+    ; because it basically copies the window DC settings
+    ; Then we make the bitmap, and link the just made DC with the bitmap 
+    mov rcx, [hwnd]
+    call GetDC
+    mov r15, rax
+
+    mov rcx, r15
+    call CreateCompatibleDC
+    mov [backbuffer_dc], rax
+
+    mov rcx, r15                    ; HDC
+    lea rdx, [bitmap_info]          ; BITMAPINFO*
+    xor r8d, r8d                    ; DIB_RGB_COLORS = 0
+    lea r9, [backbuffer_pixels]     ; receives pixel memory pointer
+
+    mov qword [rsp + 32], 0         ; hSection = NULL
+    mov qword [rsp + 40], 0         ; offset = 0
+
+    call CreateDIBSection
+
+    mov [backbuffer_bitmap], rax
+
+    ; Select bitmap into our backbuffer DC
+    mov rcx, [backbuffer_dc]
+    mov rdx, [backbuffer_bitmap]
+    call SelectObject
+    mov [old_bitmap], rax
+
+    mov rcx, [hwnd]
+    mov rdx, r15
+    call ReleaseDC
+
+    mov rcx, [hwnd]
+    mov edx, 5
     call ShowWindow
 
+    ; Registering the mouse as a raw input device, this is so we can get the mouse movement even if the mouse is outside or not focused on the window
     mov rax, [hwnd]
     mov [mouse_raw_input_device + 8], rax
-
     lea rcx, [mouse_raw_input_device]
     mov edx, 1
     mov r8d, 16
@@ -188,8 +266,8 @@ message_loop:
     call DispatchMessageA
     jmp message_loop
 
-.go_again:
-    jmp message_loop
+    .go_again:
+        jmp message_loop
 
 exit_program:
     xor rcx, rcx
@@ -209,6 +287,10 @@ window_procedure:
     je handle_timer
     cmp rdx, 0x00FF
     je handle_mouse
+    cmp rdx, 0x0100
+    je key_down
+    cmp rdx, 0x0101
+    je key_up
 
 default_processing:
     call DefWindowProcA
@@ -224,9 +306,29 @@ handle_mouse:
     call GetRawInputData
 
     movsxd rax, dword [input_buffer + 36]
-    add [pixel_x], rax
+    cvtsi2ss xmm0, rax
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    movss xmm1, [rotX]
+    addss xmm1, xmm0
+    movss [rotX], xmm1
     movsxd rax, dword [input_buffer + 40]
-    add [pixel_y], rax
+    cvtsi2ss xmm0, rax
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    mulss xmm0, [half]
+    movss xmm1, [rotY]
+    subss xmm1, xmm0
+    movss [rotY], xmm1
 
     xor rax, rax
     leave 
@@ -234,8 +336,6 @@ handle_mouse:
 
 
 handle_timer:
-    inc qword [pixel_x]
-    inc qword [pixel_y]
 
     mov rcx, [hwnd]
     xor rdx, rdx
@@ -247,26 +347,325 @@ handle_timer:
     ret
 
 handle_paint:
-    sub rsp, 112
+    ; [rsp + 80]  = HWND
+    ; [rsp + 88]  = window HDC
+    ; [rsp +112]  = PAINTSTRUCT (72 bytes)
+    ; [rsp + 32..64] are for wtvs
 
-    mov [rsp + 32], rcx
-    lea rdx, [rsp + 40]
-    call BeginPaint
+        sub rsp, 192
+        push rsi
+        push rbx
 
-    mov rcx, 100
-    mov rdx, 100
-    mov r8, [pixel_x]
-    mov r9, [pixel_y]
-    call draw_line
+        mov [rsp + 80], rcx
+        lea rdx, [rsp + 112]
+        call BeginPaint
+        mov [rsp + 88], rax
 
-    mov rcx, [rsp + 32]
-    lea rdx, [rsp + 40]
-    call EndPaint
 
-    add rsp, 112
-    xor eax, eax
-    leave
+        mov rcx, [backbuffer_dc]
+        xor edx, edx
+        xor r8d, r8d
+        mov r9d, [wnd_length]
+        mov eax, [wnd_width]
+        mov dword [rsp + 32], eax
+        mov dword [rsp + 40], 0x00000042       ; BLACKNESS
+        call PatBlt
+    ; above clears the screen wit a black rect using the pattern block transfer function
+
+    movss xmm0, [rotX]
+    call sinf
+    movss [sin_Y], xmm0
+    movss xmm0, [rotX]
+    call cosf
+    movss [cos_Y], xmm0
+    movss xmm0, [rotY]
+    call sinf
+    movss [sin_X], xmm0
+    movss xmm0, [rotY]
+    call cosf
+    movss [cos_X], xmm0
+    
+    mov rsi, 0
+    mov rbx, 0
+
+    .again:
+        lea r10, [rel v_coords]
+        lea r11, [rel f_coords]
+        mov r8, rsi 
+        imul r8, 12
+        mov r9, rbx
+        shl r9, 2
+        add r8, r9
+        add r8, r11
+        mov r9d, [r8]
+        dec r9d
+
+        imul r9, 12
+        add r9, r10
+        mov eax, [r9]
+        mov [third_array], eax
+        mov eax, [r9 + 4]
+        mov [third_array + 4], eax
+        mov eax, [r9 + 8]
+        mov [third_array + 8], eax
+
+        mov r8, rsi 
+        imul r8, 12
+        mov r9, rbx
+        inc r9
+        cmp r9, 3
+        jne .proceed
+        mov r9, 0
+        .proceed:
+        shl r9, 2
+        add r8, r9
+        add r8, r11
+        mov r9d, [r8]
+        dec r9d
+
+        imul r9, 12
+        add r9, r10
+        mov eax, [r9]
+        mov [third_array + 12], eax
+        mov eax, [r9 + 4]
+        mov [third_array + 16], eax
+        mov eax, [r9 + 8]
+        mov [third_array + 20], eax
+
+        call to_screen
+
+        ; we have to sign extend because the drawline function uses 64 bit registers, meaning the sign bit is allll the way far out, and putting 32 bits inside of 64 bits will make the register think it has a huge number, bcs of 2's complement
+        ; since we are sign extending, it is ambigious, so you must specify now
+        movsxd rax, dword [backbuffer_dc]
+        movsxd rcx, dword [triangle]
+        movsxd rdx, dword [triangle+4]
+        movsxd r8, dword [triangle+8]
+        movsxd r9, dword [triangle+12]
+        call draw_line
+
+        inc rbx
+        cmp rbx, 3
+        je .nextface
+        jmp .again
+        .nextface:
+        inc rsi
+        mov rbx, 0
+        cmp rsi, 12
+        jne .again
+        mov rsi, 0
+        
+        ; mov rax, [backbuffer_dc]
+        ; mov rcx, 310
+        ; mov rdx, 310
+        ; cvtss2si r8, [rotX]
+        ; cvtss2si r9, [rotY]
+        ; call draw_line
+
+    ; Copy the bitmap and put it onto the window dc
+        mov rcx, [rsp + 88]
+        xor edx, edx
+        xor r8d, r8d
+        mov r9d, [wnd_length]
+        mov eax, [wnd_width]
+        mov dword [rsp + 32], eax
+        mov rax, [backbuffer_dc]
+        mov qword [rsp + 40], rax
+        mov qword [rsp + 48], 0
+        mov qword [rsp + 56], 0
+        mov dword [rsp + 64], 0x00CC0020       ; SRCCOPY
+        call BitBlt
+
+        mov rcx, [rsp + 80]
+        lea rdx, [rsp + 112]
+        call EndPaint
+
+        pop rbx
+        pop rsi
+        add rsp, 192
+        xor eax, eax
+        leave
+        ret
+
+; third_array has all three points, we convert them into 2d points into the triangles array
+; This function could use MAJOR optimizations, often i calculate the same point to make different triangle, perhaps i could later use a cache that could grab the point that has alreayd been calculated
+to_screen:
+    ; x
+    movss xmm0, [third_array]
+    ; y
+    movss xmm1, [third_array + 4]
+    ; z
+    movss xmm2, [third_array + 8]
+
+
+    movss xmm3, [pixel_x]
+    addss xmm0, xmm3
+
+    movss xmm3, [pixel_y]
+    addss xmm2, xmm3
+
+    call rotatey
+    call rotatex
+    
+    ucomiss xmm2, [z_plane]
+    jb .done
+
+
+    ; y / z
+    divss xmm1, xmm2
+    ; x / z
+    divss xmm0, xmm2
+
+    addss xmm0, [one]
+    mulss xmm0, [half]
+
+    addss xmm1, [one]
+    mulss xmm1, [half]
+    movss xmm3, [one]
+    subss xmm3, xmm1
+    movss xmm1, xmm3
+
+    cvtsi2ss xmm3, dword [window_size+8]
+    cvtsi2ss xmm4, dword [window_size+12]
+
+    mulss xmm0, xmm3
+    mulss xmm1, xmm4
+
+    cvtss2si eax, xmm0
+    cvtss2si ecx, xmm1
+
+
+    mov dword [triangle], eax
+    mov dword [triangle + 4], ecx
+
+
+
+
+
+
+    ; x
+    movss xmm0, [third_array + 12]
+    ; y
+    movss xmm1, [third_array + 16]
+    ; z
+    movss xmm2, [third_array + 20]
+
+
+    movss xmm3, [pixel_x]
+    addss xmm0, xmm3
+
+    movss xmm3, [pixel_y]
+    addss xmm2, xmm3
+
+    call rotatey
+    call rotatex
+    
+    ucomiss xmm2, [z_plane]
+    jb .done
+
+
+    ; y / z
+    divss xmm1, xmm2
+    ; x / z
+    divss xmm0, xmm2
+
+    addss xmm0, [one]
+    mulss xmm0, [half]
+
+    addss xmm1, [one]
+    mulss xmm1, [half]
+    movss xmm3, [one]
+    subss xmm3, xmm1
+    movss xmm1, xmm3
+
+    cvtsi2ss xmm3, dword [window_size+8]
+    cvtsi2ss xmm4, dword [window_size+12]
+
+    mulss xmm0, xmm3
+    mulss xmm1, xmm4
+
+    cvtss2si eax, xmm0
+    cvtss2si ecx, xmm1
+
+
+    mov dword [triangle + 8], eax
+    mov dword [triangle + 12], ecx
+
     ret
+
+    .done:
+    mov dword [triangle], 0
+    mov dword [triangle + 4], 0
+    mov dword [triangle + 8], 0
+    mov dword [triangle + 12], 0
+    ret
+
+
+
+
+key_down:
+    cmp r8, 0x57
+    je .w_pressed
+    cmp r8, 0x53
+    je .s_pressed
+    cmp r8, 0x41
+    je .a_pressed
+    cmp r8, 0x44
+    je .d_pressed
+
+    jmp .done
+
+    .w_pressed:
+        or byte [keys_on], 00000001b
+        jmp .done
+
+    .s_pressed:
+        or byte [keys_on], 00000010b
+        jmp .done
+
+    .a_pressed:
+        or byte [keys_on], 00000100b
+        jmp .done
+
+    .d_pressed:
+        or byte [keys_on], 00001000b
+        jmp .done
+        
+    .done:
+        leave 
+        ret
+
+key_up:
+    cmp r8, 0x57
+    je .w_pressed
+    cmp r8, 0x53
+    je .s_pressed
+    cmp r8, 0x41
+    je .a_pressed
+    cmp r8, 0x44
+    je .d_pressed
+
+    jmp .done
+
+    .w_pressed:
+        and byte [keys_on], 11111110b
+        jmp .done
+
+    .s_pressed:
+        and byte [keys_on], 11111101b
+        jmp .done
+
+    .a_pressed:
+        and byte [keys_on], 11111011b
+        jmp .done
+
+    .d_pressed:
+        and byte [keys_on], 11110111b
+        jmp .done
+        
+    .done:
+        leave 
+        ret
+
 
 
 handle_destroy:
@@ -278,23 +677,141 @@ handle_destroy:
 
 new_thread:
     sub rsp, 40
-.loop:
-    ; inc qword [pixel_x]
-    ; inc qword [pixel_y]
+    .loop:
+        ; Including this skip will stop rendering for the mouse movement, will still change the bitmap in the back tho
+        ; cmp byte [keys_on], 0
+        ; je .skip
 
-    mov rcx, [hwnd]
-    xor rdx, rdx
-    mov r8, 1
-    call InvalidateRect
-    mov rcx, [hwnd]
-    call UpdateWindow
+    ; w key
+        test byte [keys_on], 00000001b
+        jz .forward
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        subss xmm1, xmm0 
+        movss [pixel_y], xmm1
 
-    mov ecx, 10
-    call Sleep
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        subss xmm1, xmm0 
+        movss [pixel_x], xmm1
+    .forward:
+    ; s key
+        test byte [keys_on], 00000010b
+        jz .back
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        addss xmm1, xmm0 
+        movss [pixel_y], xmm1
 
-    xor rax, rax
-    jmp .loop
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        addss xmm1, xmm0 
+        movss [pixel_x], xmm1
+    .back:
+    ; left key
+        test byte [keys_on], 00000100b
+        jz .left
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        subss xmm1, xmm0 
+        movss [pixel_y], xmm1
 
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        addss xmm1, xmm0 
+        movss [pixel_x], xmm1
+    .left:
+    ; right key
+        test byte [keys_on], 00001000b
+        jz .continue
+        movss xmm0, [sin_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_y]
+        addss xmm1, xmm0 
+        movss [pixel_y], xmm1
+
+        movss xmm0, [cos_Y]
+        mulss xmm0, [half]
+        movss xmm1, [pixel_x]
+        subss xmm1, xmm0 
+        movss [pixel_x], xmm1
+
+
+
+
+    .continue:
+        mov rcx, [hwnd]
+        xor rdx, rdx
+        mov r8, 0
+        call InvalidateRect
+        mov rcx, [hwnd]
+        call UpdateWindow
+    .skip:
+
+        mov ecx, 10
+        call Sleep
+
+        xor rax, rax
+        jmp .loop
+
+
+; xmm0 = x
+; xmm1 = y
+; xmm2 = z
+; x: x
+; y' = y * cos(a) - z * sin(a)
+; z' = y * sin(a) + z * cos(a)
+rotatex:
+    movss xmm4, xmm1
+    mulss xmm4, [cos_X]
+    movss xmm3, xmm2
+    mulss xmm3, [sin_X]
+    subss xmm4, xmm3
+    ; xmm4 has y'
+
+    movss xmm3, xmm1
+    mulss xmm3, [sin_X]
+    movss xmm5, xmm2
+    mulss xmm5, [cos_X]
+    addss xmm3, xmm5
+    ; xmm5 has z'
+
+
+    movss xmm1, xmm4
+    movss xmm2, xmm3
+
+    ret
+
+; xmm0 = x
+; xmm1 = y
+; xmm2 = z
+; x' = x * cos(a) - z * sin(a)
+; z' = x * sin(a) + z * cos(a)
+rotatey:
+    movss xmm4, xmm0
+    mulss xmm4, [cos_Y]
+    movss xmm3, xmm2
+    mulss xmm3, [sin_Y]
+    subss xmm4, xmm3
+    ; xmm4 has x'
+
+    movss xmm3, xmm0
+    mulss xmm3, [sin_Y]
+    movss xmm5, xmm2
+    mulss xmm5, [cos_Y]
+    addss xmm3, xmm5
+    ; xmm5 has z'
+
+    movss xmm0, xmm4
+    movss xmm2, xmm3
+
+    ret
 
 
 
@@ -332,14 +849,33 @@ draw_line:
         cmp rbx, rsi
         je .vert_line
 
+        ; makes sure x0 is the lower x
         mov r12, rbx
         mov r14, r8
+
+        cmp r9, 0
+        jl .done
+        cmp rdx, 0
+        jl .done
+        ; cmp r8, 0
+        ; jl .done
+        ; cmp rcx, 0
+        ; jl .done
+        cmp r9, 620
+        jg .done
+        cmp rdx, 620
+        jg .done
+        ; cmp r8, 620
+        ; jg .done
+        ; cmp rcx, 620
+        ; jg .done
 
         sub r12, r14
         js .continue
 
         xchg rbx, rsi
         xchg rcx, r8
+
         xchg rdi, r15
         xchg r9, rdx
         
@@ -358,6 +894,7 @@ draw_line:
         neg r8
         cmovs r8, rcx
         
+        ; if line is steep, change the major axis
         cmp r9, r8
         ja .reciprocal
         cvtsi2ss xmm0, rdx
@@ -376,15 +913,16 @@ draw_line:
         mov rcx, r13
         mov rdx, rbx
         mov r8, rdi
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
         mov rcx, r13
         mov rdx, rsi
         mov r8, r15
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
+    ; if slope is negative, change if we decrement or increment
         test r12, r12
         js .negative_x
 
@@ -408,13 +946,13 @@ draw_line:
         mov rcx, r13
         mov rdx, rbx
         mov r8, rdi
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
         mov rcx, r13
         mov rdx, rsi
         mov r8, r15
-        mov r9d, 0xFF
+        mov r9d, 0xFFFFFF
         call SetPixel
 
         xchg rbx, rdi
@@ -451,20 +989,29 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
-        inc r8
-        mov r9d, r15d
-        call SetPixel
+        ; rdi = y, rbx = x
+        ; equation is ((y+1) * 640)*4 + x*4
+        mov rax, rdi
+        inc rax
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
+        mov rax, rdi
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
+
 
         jmp .again_x
 
@@ -487,20 +1034,26 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
-        dec r8
-        mov r9d, r15d
-        call SetPixel
+        mov rax, rdi
+        dec rax
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rbx
-        mov r8, rdi
+        mov rax, rdi
+        imul rax, 620
+        add rax, rbx
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
         jmp .again_x_down
 
@@ -523,20 +1076,26 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rdi
-        inc rdx
-        mov r8, rbx
-        mov r9d, r15d
-        call SetPixel
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        inc rax
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rdi
-        mov r8, rbx
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
         jmp .again_y
 
@@ -545,6 +1104,7 @@ draw_line:
 
         cmp rbx, rsi
         je .done
+
 
         add r14, r12
 
@@ -558,20 +1118,26 @@ draw_line:
         mov r15, r14
         shr r15, 7
 
-        mov rcx, r13
-        mov rdx, rdi
-        inc rdx
-        mov r8, rbx
-        mov r9d, r15d
-        call SetPixel
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        inc rax
+        shl rax, 2
+        add rax, [backbuffer_pixels]
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
-        mov rcx, r13
-        mov rdx, rdi
-        mov r8, rbx
+        mov rax, rbx
+        imul rax, 620
+        add rax, rdi
+        shl rax, 2
+        add rax, [backbuffer_pixels]
         neg r15
         add r15, 255
-        mov r9d, r15d
-        call SetPixel
+        mov ecx, r15d
+        imul ecx, 0x010101
+        mov dword [rax], ecx
 
         jmp .again_y_down
 
