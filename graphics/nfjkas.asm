@@ -514,14 +514,50 @@ to_screen:
     call rotatex
     
     ucomiss xmm2, [z_plane]
-    ja .continue
+    jg .continue
+    movss [rsp], xmm0
+    movss [rsp + 4], xmm1
+    movss [rsp + 8], xmm2
 
     ; other point's z coord
-    mov xmm3, [third_array + 20]
+    movss xmm0, [third_array + 12]
+    movss xmm1, [third_array + 16]
+    movss xmm2, [third_array + 20]
+    movss xmm3, [pixel_y]
+    addss xmm2, xmm3
+    
+    call rotatey
+    call rotatex
+
+    ucomiss xmm2, [z_plane]
+    jg .yikers
+    movss [rsp + 12], xmm0
+    movss [rsp + 16], xmm1
+    movss [rsp + 20], xmm2
+
+    ; other other point's z coord
+    movss xmm0, [third_array + 24]
+    movss xmm1, [third_array + 28]
+    movss xmm2, [third_array + 32]
+    movss xmm3, [pixel_y]
+    addss xmm2, xmm3
+    call rotatey
+    call rotatex
+
+    ucomiss xmm2, [z_plane]
+    jg .nvmugood
+    ret
+    .nvmugood:
+
+
+
+    .yikers:
     
 
-    .continue:
 
+
+
+    .continue:
     
 
     ; x / z
