@@ -515,6 +515,7 @@ to_screen:
     
     ucomiss xmm2, [z_plane]
     jg .continue
+    ; 1 behind, 2 3 unknown
     movss [rsp], xmm0
     movss [rsp + 4], xmm1
     movss [rsp + 8], xmm2
@@ -531,6 +532,7 @@ to_screen:
 
     ucomiss xmm2, [z_plane]
     jg .yikers
+    ; 1 2 behind, 3 unknown
     movss [rsp + 12], xmm0
     movss [rsp + 16], xmm1
     movss [rsp + 20], xmm2
@@ -546,18 +548,48 @@ to_screen:
 
     ucomiss xmm2, [z_plane]
     jg .nvmugood
+    ; all three are behind
+    mov byte [points_valid], 0
     ret
     .nvmugood:
-
+    ; 1 2 behind, 3 in front
+    mov byte [points_valid], 0001b
+    ret
 
 
     .yikers:
+    ; 1 behind, 2 in front, 3 unknown
+    ; other other point's z coord
+    movss [rsp + 12], xmm0
+    movss [rsp + 16], xmm1
+    movss [rsp + 20], xmm2
+
+    movss xmm0, [third_array + 24]
+    movss xmm1, [third_array + 28]
+    movss xmm2, [third_array + 32]
+    movss xmm3, [pixel_y]
+    addss xmm2, xmm3
+    call rotatey
+    call rotatex
+
+    ucomiss xmm2, [z_plane]
+    jg .justone
+    ; 1 3 behind, 2 in front
+    mov byte [points_valid], 0010b
+    ret
+
+
+    .justone:
+    ; 1 behind, 2 3 in front
+    mov byte [points_valid], 0011b
+    ret
     
 
 
 
 
     .continue:
+    ; 1 in front, 2 3 unknown
     
 
     ; x / z
