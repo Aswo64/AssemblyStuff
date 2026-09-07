@@ -45,7 +45,7 @@ section .data
         dw 1
         dw 2
         ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
-        dd 256
+        dd 0
         dq 0
     pixel_x                 dd 0.0
     pixel_y                 dd 0.0
@@ -61,21 +61,22 @@ section .data
     points_valid            db 0
     one                     dd 1.0
     half                    dd 0.5
-    z_plane                 dd 0.01
+    z_plane                 dd 0.1
+    debug_z dd 0.0
     window_size:
         dd 0
         dd 0
         dd 620
         dd 620
     v_coords:
-        dd 3.25, 3.25, -3.25
-        dd -3.25, 3.25, -3.25
-        dd -3.25, -3.25, -3.25
-        dd 3.25, -3.25, -3.25
-        dd 3.25, 3.25, 3.25
-        dd -3.25, 3.25, 3.25
-        dd -3.25, -3.25, 3.25
-        dd 3.25, -3.25, 3.25
+        dd 3.25, 1.25, -3.25
+        dd -3.25, 1.25, -3.25
+        dd -3.25, -1.25, -3.25
+        dd 3.25, -1.25, -3.25
+        dd 3.25, 1.25, 3.25
+        dd -3.25, 1.25, 3.25
+        dd -3.25, -1.25, 3.25
+        dd 3.25, -1.25, 3.25
     
     f_coords:
         dd  1, 2, 3
@@ -408,7 +409,7 @@ handle_paint:
         mov [third_array + 4], eax
         mov eax, [r9 + 8]
         mov [third_array + 8], eax
-        mov [third_array + 12], 0
+        mov dword [third_array + 12], 0
 
         mov r8, rsi 
         imul r8, 12
@@ -427,11 +428,12 @@ handle_paint:
         imul r9, 12
         add r9, r10
         mov eax, [r9]
-        mov [third_array + 12], eax
-        mov eax, [r9 + 4]
         mov [third_array + 16], eax
-        mov eax, [r9 + 8]
+        mov eax, [r9 + 4]
         mov [third_array + 20], eax
+        mov eax, [r9 + 8]
+        mov [third_array + 24], eax
+        mov dword [third_array + 28], 0
 
         call to_screen
 
@@ -487,148 +489,244 @@ handle_paint:
         leave
         ret
 
-; third_array has all three points, we convert them into 2d points into the triangles array
+; third_array has all two points, we convert them into 2d points into the triangles array
 ; This function could use MAJOR optimizations, often i calculate the same point to make different triangle, perhaps i could later use a cache that could grab the point that has alreayd been calculated
 to_screen:
-    ; x
-    movss xmm0, [third_array]
-    ; y
-    movss xmm1, [third_array + 4]
-    ; z
-    movss xmm2, [third_array + 8]
-
+    ; put entire array into single float register with 4 dd bytes 
     movups xmm0, [third_array] 
-    pxor xmm1, xmm1
+    xorps xmm1, xmm1
+    ; add x
     movss xmm1, [pixel_x]
     addps xmm0, xmm1
 
-    pxor xmm1, xmm1
+    ; put y in proper place and add
+    xorps xmm1, xmm1
     insertps xmm1, [pixel_y], 00100000b
     addps xmm0, xmm1
 
+    ; let it do its tango
+    movups xmm5, xmm0
     call rotatey
     call rotatex
+    movups xmm0, xmm5
     
+    ; check z
+    insertps xmm2, xmm0, 10000000b
+    movss [debug_z], xmm2
     ucomiss xmm2, [z_plane]
-    jg .noice
+    ja .noice
+    ; mov dword [triangle], 0
+    ; mov dword [triangle + 4], 0
+    ; mov dword [triangle + 8], 0
+    ; mov dword [triangle + 12], 0
+    ; ret
     ; v1 behind, v2 unknown
-    movss [rsp], xmm0
-    movss [rsp + 4], xmm1
-    movss [rsp + 8], xmm2
+    movups xmm1, [third_array+16] 
+    xorps xmm2, xmm2
+    movss xmm2, [pixel_x]
+    addps xmm1, xmm2
 
-    movss xmm0, [third_array + 12]
-    movss xmm1, [third_array + 16]
-    movss xmm2, [third_array + 20]
+    xorps xmm2, xmm2
+    insertps xmm2, [pixel_y], 00100000b
+    addps xmm1, xmm2
 
-    movss xmm3, [pixel_x]
-    addss xmm0, xmm3
-
-    movss xmm3, [pixel_y]
-    addss xmm2, xmm3
-
+    movups xmm5, xmm1
     call rotatey
     call rotatex
+    movups xmm1, xmm5
     
+    insertps xmm2, xmm1, 10000000b
     ucomiss xmm2, [z_plane]
-    jg .sheise
+    ja .sheise
     ; v1 v2 behind
-    mov [points_valid], 0
+    mov dword [triangle], 0
+    mov dword [triangle + 4], 0
+    mov dword [triangle + 8], 0
+    mov dword [triangle + 12], 0
     ret
     .sheise:
     ; v1 behind, v2 in front
-    ; v1 is currently in stack
-    ; v2 is currently in the xmm registers
-    ; for here, lets assume p1 is v2
-    movss xmm3, [z_plane]
-    subss xmm3, xmm2
-    movss xmm4, [rsp + 8]
-    movss xmm5, xmm2
-    subss xmm4, xmm5
-    ; xmm3 now has t value
-    divss xmm3, xmm4
+    ; xmm0 has v1, xmm1 has v2
+    insertps xmm3, [z_plane], 00100000b
+    subps xmm3, xmm0
 
-    
+    movups xmm4, xmm0
+    movups xmm5, xmm1
+    subps xmm5, xmm4
+    divps xmm3, xmm5
+    shufps xmm3, xmm3, 10101010b
 
+    movups xmm4, xmm1
+    subps xmm4, xmm0
+    mulps xmm4, xmm3
+    addps xmm0, xmm4
 
-    .noice:
-    ; v1 in front, v2 unknown
+    ; divide everything by z
+    insertps xmm2, xmm0, 10000000b
+    shufps xmm2, xmm2, 0
+    divps xmm0, xmm2
 
-
-    ; y / z
-    divss xmm1, xmm2
-    ; x / z
-    divss xmm0, xmm2
+    ; seperate x and y to be projected
+    ; this can be improved by adding one first and multiplying by half since both have to do that anyway, DO THIS LATER 
+    insertps xmm2, xmm0, 01000000b
 
     addss xmm0, [one]
     mulss xmm0, [half]
 
-    addss xmm1, [one]
-    mulss xmm1, [half]
+    addss xmm2, [one]
+    mulss xmm2, [half]
     movss xmm3, [one]
-    subss xmm3, xmm1
-    movss xmm1, xmm3
+    subss xmm3, xmm2
+    movss xmm2, xmm3
 
     cvtsi2ss xmm3, dword [window_size+8]
     cvtsi2ss xmm4, dword [window_size+12]
 
     mulss xmm0, xmm3
-    mulss xmm1, xmm4
+    mulss xmm2, xmm4
 
     cvtss2si eax, xmm0
-    cvtss2si ecx, xmm1
+    cvtss2si ecx, xmm2
 
 
     mov dword [triangle], eax
     mov dword [triangle + 4], ecx
 
 
+    ; divide everything by z
+    insertps xmm2, xmm1, 10000000b
+    shufps xmm2, xmm2, 0
+    divps xmm1, xmm2
+
+    ; seperate x and y to be projected
+    ; this can be improved by adding one first and multiplying by half since both have to do that anyway, DO THIS LATER 
+    insertps xmm2, xmm1, 01000000b
+
+    addss xmm1, [one]
+    mulss xmm1, [half]
+
+    addss xmm2, [one]
+    mulss xmm2, [half]
+    movss xmm3, [one]
+    subss xmm3, xmm2
+    movss xmm2, xmm3
+
+    cvtsi2ss xmm3, dword [window_size+8]
+    cvtsi2ss xmm4, dword [window_size+12]
+
+    mulss xmm1, xmm3
+    mulss xmm2, xmm4
+
+    cvtss2si eax, xmm1
+    cvtss2si ecx, xmm2
 
 
+    mov dword [triangle + 8], eax
+    mov dword [triangle + 12], ecx
 
+    ret
+    
+    .noice:
+    ; v1 in front, v2 unknown
+    ; and then repeat above with the other 3 coords
+    movups xmm1, [third_array+16] 
+    xorps xmm2, xmm2
+    movss xmm2, [pixel_x]
+    addps xmm1, xmm2
 
-    ; x
-    movss xmm0, [third_array + 12]
-    ; y
-    movss xmm1, [third_array + 16]
-    ; z
-    movss xmm2, [third_array + 20]
+    xorps xmm2, xmm2
+    insertps xmm2, [pixel_y], 00100000b
+    addps xmm1, xmm2
 
-
-    movss xmm3, [pixel_x]
-    addss xmm0, xmm3
-
-    movss xmm3, [pixel_y]
-    addss xmm2, xmm3
-
+    movups xmm5, xmm1
     call rotatey
     call rotatex
+    movups xmm1, xmm5
     
+    insertps xmm2, xmm1, 10000000b
     ucomiss xmm2, [z_plane]
-    jb .done
+    ja .yougood
+    ; mov dword [triangle], 0
+    ; mov dword [triangle + 4], 0
+    ; mov dword [triangle + 8], 0
+    ; mov dword [triangle + 12], 0
+    ; ret
+    
+    ; v1 in front, v2 behind
+    ; xmm0 has v1, xmm1 has v2
+    ; for here, lets assume p1 is v2
+    insertps xmm3, [z_plane], 00100000b
+    subps xmm3, xmm1
 
+    movups xmm4, xmm1
+    movups xmm5, xmm0
+    subps xmm5, xmm4
+    divps xmm3, xmm5
+    shufps xmm3, xmm3, 10101010b
 
-    ; y / z
-    divss xmm1, xmm2
-    ; x / z
-    divss xmm0, xmm2
+    movups xmm4, xmm0
+    subps xmm4, xmm1
+    mulps xmm4, xmm3
+    addps xmm1, xmm4
+
+    ; divide everything by z
+    insertps xmm2, xmm0, 10000000b
+    shufps xmm2, xmm2, 0
+    divps xmm0, xmm2
+
+    ; seperate x and y to be projected
+    ; this can be improved by adding one first and multiplying by half since both have to do that anyway, DO THIS LATER 
+    insertps xmm2, xmm0, 01000000b
 
     addss xmm0, [one]
     mulss xmm0, [half]
 
-    addss xmm1, [one]
-    mulss xmm1, [half]
+    addss xmm2, [one]
+    mulss xmm2, [half]
     movss xmm3, [one]
-    subss xmm3, xmm1
-    movss xmm1, xmm3
+    subss xmm3, xmm2
+    movss xmm2, xmm3
 
     cvtsi2ss xmm3, dword [window_size+8]
     cvtsi2ss xmm4, dword [window_size+12]
 
     mulss xmm0, xmm3
-    mulss xmm1, xmm4
+    mulss xmm2, xmm4
 
     cvtss2si eax, xmm0
-    cvtss2si ecx, xmm1
+    cvtss2si ecx, xmm2
+
+
+    mov dword [triangle], eax
+    mov dword [triangle + 4], ecx
+
+
+    ; divide everything by z
+    insertps xmm2, xmm1, 10000000b
+    shufps xmm2, xmm2, 0
+    divps xmm1, xmm2
+
+    ; seperate x and y to be projected
+    ; this can be improved by adding one first and multiplying by half since both have to do that anyway, DO THIS LATER 
+    insertps xmm2, xmm1, 01000000b
+
+    addss xmm1, [one]
+    mulss xmm1, [half]
+
+    addss xmm2, [one]
+    mulss xmm2, [half]
+    movss xmm3, [one]
+    subss xmm3, xmm2
+    movss xmm2, xmm3
+
+    cvtsi2ss xmm3, dword [window_size+8]
+    cvtsi2ss xmm4, dword [window_size+12]
+
+    mulss xmm1, xmm3
+    mulss xmm2, xmm4
+
+    cvtss2si eax, xmm1
+    cvtss2si ecx, xmm2
 
 
     mov dword [triangle + 8], eax
@@ -636,11 +734,63 @@ to_screen:
 
     ret
 
-    .done:
-    mov dword [triangle], 0
-    mov dword [triangle + 4], 0
-    mov dword [triangle + 8], 0
-    mov dword [triangle + 12], 0
+    .yougood:
+    ; 1 2 in front
+    insertps xmm2, xmm0, 10000000b
+    shufps xmm2, xmm2, 0
+    divps xmm0, xmm2
+
+    insertps xmm2, xmm0, 01000000b
+
+    addss xmm0, [one]
+    mulss xmm0, [half]
+
+    addss xmm2, [one]
+    mulss xmm2, [half]
+    movss xmm3, [one]
+    subss xmm3, xmm2
+    movss xmm2, xmm3
+
+    cvtsi2ss xmm3, dword [window_size+8]
+    cvtsi2ss xmm4, dword [window_size+12]
+
+    mulss xmm0, xmm3
+    mulss xmm2, xmm4
+
+    cvtss2si eax, xmm0
+    cvtss2si ecx, xmm2
+
+
+    mov dword [triangle], eax
+    mov dword [triangle + 4], ecx
+
+    insertps xmm2, xmm1, 10000000b
+    shufps xmm2, xmm2, 0
+    divps xmm1, xmm2
+
+    insertps xmm2, xmm1, 01000000b
+
+    addss xmm1, [one]
+    mulss xmm1, [half]
+
+    addss xmm2, [one]
+    mulss xmm2, [half]
+    movss xmm3, [one]
+    subss xmm3, xmm2
+    movss xmm2, xmm3
+
+    cvtsi2ss xmm3, dword [window_size+8]
+    cvtsi2ss xmm4, dword [window_size+12]
+
+    mulss xmm1, xmm3
+    mulss xmm2, xmm4
+
+    cvtss2si eax, xmm1
+    cvtss2si ecx, xmm2
+
+
+    mov dword [triangle + 8], eax
+    mov dword [triangle + 12], ecx
     ret
 
 
@@ -805,16 +955,16 @@ new_thread:
         jmp .loop
 
 
-; xmm0 = x
-; xmm1 = y
-; xmm2 = z
+
 ; x: x
 ; y' = y * cos(a) - z * sin(a)
 ; z' = y * sin(a) + z * cos(a)
 rotatex:
-    movups xmm1, xmm0
-    movups xmm2, xmm0
+    ; make two clones of the original 
+    movups xmm1, xmm5
+    movups xmm2, xmm5
 
+    ; multiply both registers by cos and sin respectively to get values whenever i need
     movss xmm3, [cos_X]
     shufps xmm3, xmm3, 0
     mulps xmm1, xmm3
@@ -823,58 +973,53 @@ rotatex:
     shufps xmm3, xmm3, 0
     mulps xmm2, xmm3
 
+    ; do the math
     xorps xmm3, xmm3
-    insertps xmm3, xmm2, 00100000b
+    insertps xmm3, xmm2, 10010000b
 
     subps xmm1, xmm3
 
-    movss xmm4, xmm1
-    mulss xmm4, [cos_X]
-    movss xmm3, xmm2
-    mulss xmm3, [sin_X]
-    subss xmm4, xmm3
-    ; xmm4 has y'
+    xorps xmm3, xmm3
+    insertps xmm3, xmm2, 01100000b
 
-    movss xmm3, xmm1
-    mulss xmm3, [sin_X]
-    movss xmm5, xmm2
-    mulss xmm5, [cos_X]
-    addss xmm3, xmm5
-    ; xmm5 has z'
+    addps xmm1, xmm3
 
+    ; get the original x back because in xmm1 it is currently x*cos(a) and we just want x
+    movss xmm1, xmm5   
 
-    movss xmm1, xmm4
-    movss xmm2, xmm3
-    
-
+    movups xmm5, xmm1
     ret
 
-; xmm0 = x
-; xmm1 = y
-; xmm2 = z
 ; x' = x * cos(a) - z * sin(a)
 ; z' = x * sin(a) + z * cos(a)
 rotatey:
-    movss xmm4, xmm0
-    mulss xmm4, [cos_Y]
-    movss xmm3, xmm2
-    mulss xmm3, [sin_Y]
-    subss xmm4, xmm3
-    ; xmm4 has x'
+    ; do the same ting but with y
+    movups xmm1, xmm5
+    movups xmm2, xmm5
 
-    movss xmm3, xmm0
-    mulss xmm3, [sin_Y]
-    movss xmm5, xmm2
-    mulss xmm5, [cos_Y]
-    addss xmm3, xmm5
-    ; xmm5 has z'
+    movss xmm3, [cos_Y]
+    shufps xmm3, xmm3, 0
+    mulps xmm1, xmm3
 
-    movss xmm0, xmm4
-    movss xmm2, xmm3
+    movss xmm3, [sin_Y]
+    shufps xmm3, xmm3, 0
+    mulps xmm2, xmm3
 
+    xorps xmm3, xmm3
+    insertps xmm3, xmm2, 10000000b
+
+    subps xmm1, xmm3
+
+    xorps xmm3, xmm3
+    insertps xmm3, xmm2, 00100000b
+
+    addps xmm1, xmm3
+
+    ; cant just use movss here because the y is in the 2nd element, but same logic here as x-axis
+    insertps xmm1, xmm5, 01010000b
+
+    movups xmm5, xmm1
     ret
-
-
 
 ; rax = HDC
 ; rcx = x0
@@ -883,8 +1028,6 @@ rotatey:
 ; r9 = y1
 ; Draws line wow 
 draw_line:
-    ; aligning to 16 bytes
-        sub rsp, 48
     ; this function is indirectly being called by windows, therefore if we use non-volatile registers, we must return them back when done, a.k.a popping these back when done
     ; also pushing two is best as each register has 8 bytes, and we need the 16 byte alignment, so pushing two aligns it properly for setPixel function to work
         push rbx
@@ -894,6 +1037,8 @@ draw_line:
         push r13
         push r14
         push r15
+    ; aligning to 16 bytes
+    sub rsp, 48
 
         
     ; rbx = x0
@@ -914,22 +1059,22 @@ draw_line:
         mov r12, rbx
         mov r14, r8
 
-        cmp r9, 0
+        cmp r9, 1
         jl .done
-        cmp rdx, 0
+        cmp rdx, 1
         jl .done
-        ; cmp r8, 0
-        ; jl .done
-        ; cmp rcx, 0
-        ; jl .done
-        cmp r9, 620
+        cmp r8, 1
+        jl .done
+        cmp rcx, 1
+        jl .done
+        cmp r9, 619
         jg .done
-        cmp rdx, 620
+        cmp rdx, 619
         jg .done
-        ; cmp r8, 620
-        ; jg .done
-        ; cmp rcx, 620
-        ; jg .done
+        cmp r8, 619
+        jg .done
+        cmp rcx, 619
+        jg .done
 
         sub r12, r14
         js .continue
@@ -1249,6 +1394,7 @@ draw_line:
 
     .done:
         mov rax, r13
+        add rsp, 48
         pop r15
         pop r14
         pop r13
@@ -1256,5 +1402,4 @@ draw_line:
         pop rsi 
         pop rdi
         pop rbx
-        add rsp, 48
         ret
