@@ -115,7 +115,7 @@ section .bss
     old_bitmap         resq 1
     backbuffer_pixels  resq 1
     ; I doubt the points will go to 16 million, i could always change it but this 3d engine doesnt need so, it would be more fun to try to work with only 32 bits as well
-    third_array        resd 6
+    third_array        resd 8
     triangle           resd 4
     
 
@@ -408,6 +408,7 @@ handle_paint:
         mov [third_array + 4], eax
         mov eax, [r9 + 8]
         mov [third_array + 8], eax
+        mov [third_array + 12], 0
 
         mov r8, rsi 
         imul r8, 12
@@ -496,6 +497,28 @@ to_screen:
     ; z
     movss xmm2, [third_array + 8]
 
+    movups xmm0, [third_array] 
+    pxor xmm1, xmm1
+    movss xmm1, [pixel_x]
+    addps xmm0, xmm1
+
+    pxor xmm1, xmm1
+    insertps xmm1, [pixel_y], 00100000b
+    addps xmm0, xmm1
+
+    call rotatey
+    call rotatex
+    
+    ucomiss xmm2, [z_plane]
+    jg .noice
+    ; v1 behind, v2 unknown
+    movss [rsp], xmm0
+    movss [rsp + 4], xmm1
+    movss [rsp + 8], xmm2
+
+    movss xmm0, [third_array + 12]
+    movss xmm1, [third_array + 16]
+    movss xmm2, [third_array + 20]
 
     movss xmm3, [pixel_x]
     addss xmm0, xmm3
@@ -507,7 +530,28 @@ to_screen:
     call rotatex
     
     ucomiss xmm2, [z_plane]
-    jb .done
+    jg .sheise
+    ; v1 v2 behind
+    mov [points_valid], 0
+    ret
+    .sheise:
+    ; v1 behind, v2 in front
+    ; v1 is currently in stack
+    ; v2 is currently in the xmm registers
+    ; for here, lets assume p1 is v2
+    movss xmm3, [z_plane]
+    subss xmm3, xmm2
+    movss xmm4, [rsp + 8]
+    movss xmm5, xmm2
+    subss xmm4, xmm5
+    ; xmm3 now has t value
+    divss xmm3, xmm4
+
+    
+
+
+    .noice:
+    ; v1 in front, v2 unknown
 
 
     ; y / z
@@ -768,6 +812,22 @@ new_thread:
 ; y' = y * cos(a) - z * sin(a)
 ; z' = y * sin(a) + z * cos(a)
 rotatex:
+    movups xmm1, xmm0
+    movups xmm2, xmm0
+
+    movss xmm3, [cos_X]
+    shufps xmm3, xmm3, 0
+    mulps xmm1, xmm3
+
+    movss xmm3, [sin_X]
+    shufps xmm3, xmm3, 0
+    mulps xmm2, xmm3
+
+    xorps xmm3, xmm3
+    insertps xmm3, xmm2, 00100000b
+
+    subps xmm1, xmm3
+
     movss xmm4, xmm1
     mulss xmm4, [cos_X]
     movss xmm3, xmm2
@@ -785,6 +845,7 @@ rotatex:
 
     movss xmm1, xmm4
     movss xmm2, xmm3
+    
 
     ret
 
