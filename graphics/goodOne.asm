@@ -47,6 +47,8 @@ section .data
         ; The value 256 is for the inputsink flag, basically allows for the input to go to the window even if it is not focused 
         dd 0
         dq 0
+    ; could align this better, some of the floats can be placed in 16-byte aligned areas, allowing us to use movaps instead of movups, 
+    ; which movaps is far more efficient since it trusts that the memory location is already aligned
     pixel_x                 dd 0.0
     pixel_y                 dd 0.0
     rotX                    dd 0.0
@@ -64,6 +66,7 @@ section .data
     z_plane                 dd 0.1
     min                     dd 2.0
     max                     dd 618.0
+    align 16
     make_float_neg        dd 0x80000000, 0x00000000, 0x00000000, 0x00000000
     debug_z dd 0.0
     window_size:
@@ -1063,7 +1066,8 @@ draw_line:
         cmp rdi, r15
         je .horz_line
 
-        ;left
+        ; Liang-barsky algorithm
+        ;left, xmm0 has t_min, xmm1 has t_max
         xorps xmm0, xmm0
         movss xmm1, [one]
 
@@ -1501,20 +1505,53 @@ draw_line:
 
         jmp .again_y_down
 
+    ; rbx = x0
+    ; rdi = y0
+    ; rsi = x1
+    ; r15 = y1
+    ; r15 = rdi
     .horz_line:
-    jmp .done
+    cmp r15, [window_size+8]
+    jg .done
+    cmp r15, [window_size+12]
+    jg .done
+    cmp r15, [window_size+0]
+    jl .done
+    cmp r15, [window_size+4]
+    jl .done
+
+    cmp rbx, [window_size+4]
+    jl .done
+    cmp rbx, [window_size+8]
+    jg .done
+    cmp rsi, [window_size+4]
+    jl .done
+    cmp rsi, [window_size+8]
+    jg .done
+
+    mov r12, rbx
+    mov r14, r8
+    sub r12, r14
+    js .continue
+
+    xchg rbx, rsi
+    xchg rcx, r8
+
+    xchg rdi, r15
+    xchg r9, rdx
+    jmp .continue
 
     ; rdi = y0
     ; r15 = y1
     .vert_line:
-    ;     cmp r15, rbx
-    ;     je .point_perchance 
+    ; cmp r15, rbx
+    ; je .point_perchance 
     ; .nvm_frown:
-        cmp rdi, r15
-        ; Previously used jb instead of jl, but jb only works with unsigned integers (only positive numbers), 
-        ; so here, theres no harm to use jl, as if x is negative, it will cause for an infinite loop
-        jl .vert_line_up
-        jmp .vert_line_down
+    cmp rdi, r15
+    ; Previously used jb instead of jl, but jb only works with unsigned integers (only positive numbers), 
+    ; so here, theres no harm to use jl, as if x is negative, it will cause for an infinite loop
+    jl .vert_line_up
+    jmp .vert_line_down
         
 
     .vert_line_up:
