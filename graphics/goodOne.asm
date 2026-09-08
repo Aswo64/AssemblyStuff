@@ -1197,6 +1197,7 @@ draw_line:
         mulss xmm2, xmm0
         addss xmm2, xmm3
         cvtss2si rdx, xmm2
+        
 
         ; x1, uses t_max
         cvtsi2ss xmm2, rsi
@@ -1213,6 +1214,8 @@ draw_line:
         mulss xmm2, xmm1
         addss xmm2, xmm3
         cvtss2si r9, xmm2
+
+        .done_clipping:
 
         ; rbx = x0
         mov rbx, rcx
@@ -1511,35 +1514,88 @@ draw_line:
     ; r15 = y1
     ; r15 = rdi
     .horz_line:
-    cmp r15, [window_size+8]
-    jg .done
-    cmp r15, [window_size+12]
-    jg .done
-    cmp r15, [window_size+0]
+    cmp r15, 1
     jl .done
-    cmp r15, [window_size+4]
-    jl .done
-
-    cmp rbx, [window_size+4]
-    jl .done
-    cmp rbx, [window_size+8]
-    jg .done
-    cmp rsi, [window_size+4]
-    jl .done
-    cmp rsi, [window_size+8]
+    cmp r15, 619
     jg .done
 
-    mov r12, rbx
-    mov r14, r8
-    sub r12, r14
-    js .continue
+    ;left, xmm0 has t_min, xmm1 has t_max
+    xorps xmm0, xmm0
+    movss xmm1, [one]
 
-    xchg rbx, rsi
-    xchg rcx, r8
+    cvtsi2ss xmm2, rbx
+    cvtsi2ss xmm3, r8
+    ucomiss xmm3, xmm2
+    ja .positived
+    subss xmm3, xmm2
+    xorps xmm3, [make_float_neg]
+    movss xmm4, [min]
+    movss xmm5, xmm2
+    subss xmm5, xmm4
+    divss xmm5, xmm3
+    ucomiss xmm5, xmm1
+    ja .skipd
+    movss xmm1, xmm5
+    jmp .skipd
+    .positived:
+    subss xmm3, xmm2
+    xorps xmm3, [make_float_neg]
+    movss xmm4, [min]
+    movss xmm5, xmm2
+    subss xmm5, xmm4
+    divss xmm5, xmm3
+    ucomiss xmm5, xmm0
+    jb .skipd
+    movss xmm0, xmm5
+    .skipd:
 
-    xchg rdi, r15
-    xchg r9, rdx
-    jmp .continue
+    ; right
+    cvtsi2ss xmm2, rbx
+    cvtsi2ss xmm3, r8
+    ucomiss xmm3, xmm2
+    ja .positivee
+    subss xmm3, xmm2
+    movss xmm4, [max]
+    movss xmm5, xmm2
+    subss xmm4, xmm5
+    divss xmm4, xmm3
+    ucomiss xmm4, xmm0
+    jb .skipe
+    movss xmm0, xmm4
+    jmp .skipe
+    .positivee:
+    subss xmm3, xmm2
+    movss xmm4, [max]
+    movss xmm5, xmm2
+    subss xmm4, xmm5
+    divss xmm4, xmm3
+    ucomiss xmm4, xmm1
+    ja .skipe
+    movss xmm1, xmm4
+    .skipe:
+
+    ucomiss xmm0, xmm1
+    jb .uguccia
+    jmp .done
+    .uguccia:
+
+    ; x0, uses t_min
+    cvtsi2ss xmm2, rsi
+    cvtsi2ss xmm3, rbx
+    subss xmm2, xmm3
+    mulss xmm2, xmm0
+    addss xmm2, xmm3
+    cvtss2si rcx, xmm2
+
+    ; x1, uses t_max
+    cvtsi2ss xmm2, rsi
+    cvtsi2ss xmm3, rbx
+    subss xmm2, xmm3
+    mulss xmm2, xmm1
+    addss xmm2, xmm3
+    cvtss2si r8, xmm2
+
+    jmp .done_clipping
 
     ; rdi = y0
     ; r15 = y1
@@ -1547,6 +1603,89 @@ draw_line:
     ; cmp r15, rbx
     ; je .point_perchance 
     ; .nvm_frown:
+
+    xorps xmm0, xmm0
+    movss xmm1, [one]
+    ; top
+    cvtsi2ss xmm2, rdx
+    cvtsi2ss xmm3, r15
+    ucomiss xmm3, xmm2
+    ja .positivef
+    subss xmm3, xmm2
+    movss xmm4, [min]
+    ; can probably delete the line below me, check later
+    movss xmm5, xmm2
+    subss xmm4, xmm5
+    divss xmm4, xmm3
+    ucomiss xmm4, xmm1
+    ja .skipf
+    movss xmm1, xmm4
+    jmp .skipf
+    .positivef:
+    subss xmm3, xmm2
+    movss xmm4, [min]
+    movss xmm5, xmm2
+    subss xmm4, xmm5
+    divss xmm4, xmm3
+    ucomiss xmm4, xmm0
+    jb .skipf
+    movss xmm0, xmm4
+    .skipf:
+
+    ; bottom
+    cvtsi2ss xmm2, rdx
+    cvtsi2ss xmm3, r15
+    ucomiss xmm3, xmm2
+    ja .positiveh
+    subss xmm3, xmm2
+    xorps xmm3, [make_float_neg]
+    movss xmm4, [max]
+    ; can probably delete the line below me, check later
+    movss xmm5, xmm2
+    subss xmm5, xmm4
+    divss xmm5, xmm3
+    ucomiss xmm5, xmm0
+    jb .skiph
+    movss xmm0, xmm5
+    jmp .skiph
+    .positiveh:
+    subss xmm3, xmm2
+    xorps xmm3, [make_float_neg]
+    movss xmm4, [max]
+    movss xmm5, xmm2
+    subss xmm5, xmm4
+    divss xmm5, xmm3
+    ucomiss xmm5, xmm1
+    ja .skiph
+    movss xmm1, xmm5
+    .skiph:
+
+    ucomiss xmm0, xmm1
+    jb .uguccib
+    jmp .done
+    .uguccib:
+
+    ; y0
+    cvtsi2ss xmm2, r15
+    cvtsi2ss xmm3, rdi
+    subss xmm2, xmm3
+    mulss xmm2, xmm0
+    addss xmm2, xmm3
+    cvtss2si rdx, xmm2
+
+    ; y1
+    cvtsi2ss xmm2, r15
+    cvtsi2ss xmm3, rdi
+    subss xmm2, xmm3
+    mulss xmm2, xmm1
+    addss xmm2, xmm3
+    cvtss2si r9, xmm2
+
+    ; rdi = y0
+    mov rdi, rdx
+    ; r15 = y1
+    mov r15, r9
+
     cmp rdi, r15
     ; Previously used jb instead of jl, but jb only works with unsigned integers (only positive numbers), 
     ; so here, theres no harm to use jl, as if x is negative, it will cause for an infinite loop
