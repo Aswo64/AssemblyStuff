@@ -62,6 +62,9 @@ section .data
     one                     dd 1.0
     half                    dd 0.5
     z_plane                 dd 0.1
+    min                     dd 2.0
+    max                     dd 618.0
+    make_float_neg        dd 0x80000000, 0x00000000, 0x00000000, 0x00000000
     debug_z dd 0.0
     window_size:
         dd 0
@@ -1027,6 +1030,8 @@ rotatey:
 ; r8 = x1
 ; r9 = y1
 ; Draws line wow 
+
+
 draw_line:
     ; this function is indirectly being called by windows, therefore if we use non-volatile registers, we must return them back when done, a.k.a popping these back when done
     ; also pushing two is best as each register has 8 bytes, and we need the 16 byte alignment, so pushing two aligns it properly for setPixel function to work
@@ -1055,27 +1060,176 @@ draw_line:
         cmp rbx, rsi
         je .vert_line
 
+        cmp rdi, r15
+        je .horz_line
+
+        ;left
+        xorps xmm0, xmm0
+        movss xmm1, [one]
+
+        cvtsi2ss xmm2, rbx
+        cvtsi2ss xmm3, r8
+        ucomiss xmm3, xmm2
+        ja .positive
+        subss xmm3, xmm2
+        xorps xmm3, [make_float_neg]
+        movss xmm4, [min]
+        movss xmm5, xmm2
+        subss xmm5, xmm4
+        divss xmm5, xmm3
+        ucomiss xmm5, xmm1
+        ja .skip
+        movss xmm1, xmm5
+        jmp .skip
+        .positive:
+        subss xmm3, xmm2
+        xorps xmm3, [make_float_neg]
+        movss xmm4, [min]
+        movss xmm5, xmm2
+        subss xmm5, xmm4
+        divss xmm5, xmm3
+        ucomiss xmm5, xmm0
+        jb .skip
+        movss xmm0, xmm5
+        .skip:
+
+        ; right
+        cvtsi2ss xmm2, rbx
+        cvtsi2ss xmm3, r8
+        ucomiss xmm3, xmm2
+        ja .positivea
+        subss xmm3, xmm2
+        movss xmm4, [max]
+        movss xmm5, xmm2
+        subss xmm4, xmm5
+        divss xmm4, xmm3
+        ucomiss xmm4, xmm0
+        jb .skipa
+        movss xmm0, xmm4
+        jmp .skipa
+        .positivea:
+        subss xmm3, xmm2
+        movss xmm4, [max]
+        movss xmm5, xmm2
+        subss xmm4, xmm5
+        divss xmm4, xmm3
+        ucomiss xmm4, xmm1
+        ja .skipa
+        movss xmm1, xmm4
+        .skipa:
+
+        ; top
+        cvtsi2ss xmm2, rdx
+        cvtsi2ss xmm3, r15
+        ucomiss xmm3, xmm2
+        ja .positiveb
+        subss xmm3, xmm2
+        movss xmm4, [min]
+        ; can probably delete the line below me, check later
+        movss xmm5, xmm2
+        subss xmm4, xmm5
+        divss xmm4, xmm3
+        ucomiss xmm4, xmm1
+        ja .skipb
+        movss xmm1, xmm4
+        jmp .skipb
+        .positiveb:
+        subss xmm3, xmm2
+        movss xmm4, [min]
+        movss xmm5, xmm2
+        subss xmm4, xmm5
+        divss xmm4, xmm3
+        ucomiss xmm4, xmm0
+        jb .skipb
+        movss xmm0, xmm4
+        .skipb:
+
+        ; bottom
+        cvtsi2ss xmm2, rdx
+        cvtsi2ss xmm3, r15
+        ucomiss xmm3, xmm2
+        ja .positivec
+        subss xmm3, xmm2
+        xorps xmm3, [make_float_neg]
+        movss xmm4, [max]
+        ; can probably delete the line below me, check later
+        movss xmm5, xmm2
+        subss xmm5, xmm4
+        divss xmm5, xmm3
+        ucomiss xmm5, xmm0
+        jb .skipc
+        movss xmm0, xmm5
+        jmp .skipc
+        .positivec:
+        subss xmm3, xmm2
+        xorps xmm3, [make_float_neg]
+        movss xmm4, [max]
+        movss xmm5, xmm2
+        subss xmm5, xmm4
+        divss xmm5, xmm3
+        ucomiss xmm5, xmm1
+        ja .skipc
+        movss xmm1, xmm5
+        .skipc:
+
+        ucomiss xmm0, xmm1
+        jb .ugucci
+        jmp .done
+        .ugucci:
+        ; calculating new coords using new t's
+        ; THESE CAN USE SOME HEAVYYY OPTIMIZATIONS
+        ; x0, uses t_min
+        cvtsi2ss xmm2, rsi
+        cvtsi2ss xmm3, rbx
+        subss xmm2, xmm3
+        mulss xmm2, xmm0
+        addss xmm2, xmm3
+        cvtss2si rcx, xmm2
+
+        ; y0
+        cvtsi2ss xmm2, r15
+        cvtsi2ss xmm3, rdi
+        subss xmm2, xmm3
+        mulss xmm2, xmm0
+        addss xmm2, xmm3
+        cvtss2si rdx, xmm2
+
+        ; x1, uses t_max
+        cvtsi2ss xmm2, rsi
+        cvtsi2ss xmm3, rbx
+        subss xmm2, xmm3
+        mulss xmm2, xmm1
+        addss xmm2, xmm3
+        cvtss2si r8, xmm2
+
+        ; y1, uses t_max
+        cvtsi2ss xmm2, r15
+        cvtsi2ss xmm3, rdi
+        subss xmm2, xmm3
+        mulss xmm2, xmm1
+        addss xmm2, xmm3
+        cvtss2si r9, xmm2
+
+        ; rbx = x0
+        mov rbx, rcx
+        ; rdi = y0
+        mov rdi, rdx
+        ; rsi = x1
+        mov rsi, r8
+        ; r15 = y1
+        mov r15, r9
+        
+        cmp rbx, rsi
+        jne .not_point
+        cmp rdi, r15
+        jne .not_point
+        jmp .done
+        .not_point:
+
+
         ; makes sure x0 is the lower x
         mov r12, rbx
         mov r14, r8
-
-        cmp r9, 1
-        jl .done
-        cmp rdx, 1
-        jl .done
-        cmp r8, 1
-        jl .done
-        cmp rcx, 1
-        jl .done
-        cmp r9, 619
-        jg .done
-        cmp rdx, 619
-        jg .done
-        cmp r8, 619
-        jg .done
-        cmp rcx, 619
-        jg .done
-
         sub r12, r14
         js .continue
 
@@ -1173,7 +1327,7 @@ draw_line:
         jmp .again_y
 
     .negative_y:
-        neg r12,
+        neg r12
         jmp .again_y_down
 
 
@@ -1196,7 +1350,7 @@ draw_line:
         shr r15, 7
 
         ; rdi = y, rbx = x
-        ; equation is ((y+1) * 640)*4 + x*4
+        ; equation is ((y+1) * 620)*4 + x*4
         mov rax, rdi
         inc rax
         imul rax, 620
@@ -1346,6 +1500,9 @@ draw_line:
         mov dword [rax], ecx
 
         jmp .again_y_down
+
+    .horz_line:
+    jmp .done
 
     ; rdi = y0
     ; r15 = y1
