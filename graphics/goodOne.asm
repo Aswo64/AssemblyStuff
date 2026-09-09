@@ -64,6 +64,7 @@ section .data
     one                     dd 1.0
     half                    dd 0.5
     z_plane                 dd 0.1
+    zero                    dd 0.0
     min                     dd 2.0
     max                     dd 618.0
     align 16
@@ -545,6 +546,7 @@ to_screen:
     ucomiss xmm2, [z_plane]
     ja .sheise
     ; v1 v2 behind
+    .done:
     mov dword [triangle], 0
     mov dword [triangle + 4], 0
     mov dword [triangle + 8], 0
@@ -559,9 +561,12 @@ to_screen:
     movups xmm4, xmm0
     movups xmm5, xmm1
     subps xmm5, xmm4
+    insertps xmm2, xmm5, 10000000b
+    ucomiss xmm2, [zero]
+    je .done
     divps xmm3, xmm5
     shufps xmm3, xmm3, 10101010b
-
+    
     movups xmm4, xmm1
     subps xmm4, xmm0
     mulps xmm4, xmm3
@@ -667,6 +672,9 @@ to_screen:
     movups xmm4, xmm1
     movups xmm5, xmm0
     subps xmm5, xmm4
+    insertps xmm2, xmm5, 10000000b
+    ucomiss xmm2, [zero]
+    je .done
     divps xmm3, xmm5
     shufps xmm3, xmm3, 10101010b
 
